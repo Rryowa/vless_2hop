@@ -1,0 +1,15 @@
+[Unit]
+Description=TLS Push Monitor (curl -> Uptime Kuma)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/tls-push-monitor.sh; sleep 30; done'
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
