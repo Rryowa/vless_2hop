@@ -84,6 +84,16 @@ github_latest_version() {
         | head -1
 }
 
+# ── Write env file early so all services that need it can start ──────────────
+cat > /etc/xray-monitor.env << EOF
+TLS_TARGETS=debian.snt.utwente.nl:443,nl.archive.ubuntu.com:8443,eclipse.mirror.liteserver.nl:9443
+TLS_RESOLVE_TO=${EU_IP}
+TLS_MODE=dpi
+TLS_PUSHGATEWAY_URL=http://127.0.0.1:9091
+BARK_KEY=${BARK_KEY}
+EOF
+chmod 600 /etc/xray-monitor.env
+
 # ── Step 1: Dependencies ─────────────────────────────────────────────────────
 echo "[1/12] Installing system dependencies..."
 apt update && apt install -y curl wget git nginx certbot python3-certbot-nginx python3
@@ -530,17 +540,8 @@ else
 fi
 echo "[10/12] UFW rules applied."
 
-# ── Step 11: Write env file for tls-push-monitor (DPI mode) ──────────────────
-echo "[11/12] Writing tls-push-monitor env file (DPI mode)..."
-cat > /etc/xray-monitor.env << EOF
-TLS_TARGETS=debian.snt.utwente.nl:443,nl.archive.ubuntu.com:8443,eclipse.mirror.liteserver.nl:9443
-TLS_RESOLVE_TO=${EU_IP}
-TLS_MODE=dpi
-TLS_PUSHGATEWAY_URL=http://127.0.0.1:9091
-BARK_KEY=${BARK_KEY}
-EOF
-chmod 600 /etc/xray-monitor.env
-echo "[11/12] Env file written to /etc/xray-monitor.env (mode 600)."
+# ── Step 11: (env file already written at startup) ───────────────────────────
+echo "[11/12] Env file already written to /etc/xray-monitor.env (mode 600)."
 
 # ── Step 12: Install tls-push-monitor (DPI mode) ─────────────────────────────
 echo "[12/12] Installing tls-push-monitor service (DPI mode)..."
