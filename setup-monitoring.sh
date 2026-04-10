@@ -85,9 +85,11 @@ github_latest_version() {
         | head -1
 }
 
+source "$REPO_DIR/sni-config.sh"
+
 # ── Write env file early so all services that need it can start ──────────────
 cat > /etc/xray-monitor.env << EOF
-TLS_TARGETS=debian.snt.utwente.nl:443,nl.archive.ubuntu.com:8443,eclipse.mirror.liteserver.nl:9443
+TLS_TARGETS=${SNI_1}:${PORT_1},${SNI_2}:${PORT_2},${SNI_3}:${PORT_3}
 TLS_RESOLVE_TO=${EU_IP}
 TLS_MODE=dpi
 TLS_PUSHGATEWAY_URL=http://127.0.0.1:9091
@@ -120,7 +122,13 @@ id prometheus &>/dev/null || useradd --no-create-home --shell /bin/false prometh
 
 # Create dirs and copy config
 mkdir -p /etc/prometheus /var/lib/prometheus
-sed -e "s/<EU_IP>/${EU_IP}/g" -e "s/<KUMA_DOMAIN>/${KUMA_DOMAIN}/g" "$REPO_DIR/prometheus.yml" > /etc/prometheus/prometheus.yml
+sed -e "s/<EU_IP>/${EU_IP}/g" \
+    -e "s/<KUMA_DOMAIN>/${KUMA_DOMAIN}/g" \
+    -e "s/<LOCAL_SNI>/${LOCAL_SNI}/g" \
+    -e "s/<SNI_1>/${SNI_1}/g" \
+    -e "s/<SNI_2>/${SNI_2}/g" \
+    -e "s/<SNI_3>/${SNI_3}/g" \
+    "$REPO_DIR/prometheus.yml" > /etc/prometheus/prometheus.yml
 cp "$REPO_DIR/prometheus-alerts.yml" /etc/prometheus/prometheus-alerts.yml
 
 # Blackbox config (written now, used by step 5)

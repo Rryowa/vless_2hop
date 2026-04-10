@@ -12,13 +12,7 @@ fi
 
 export PATH=$PATH:/usr/local/bin
 
-SNI_1="debian.snt.utwente.nl"
-SNI_2="nl.archive.ubuntu.com"
-SNI_3="eclipse.mirror.liteserver.nl"
-LOCAL_SNI="vkvideo.ru"
-PORT_1=443
-PORT_2=8443
-PORT_3=9443
+source "$(dirname "${BASH_SOURCE[0]}")/sni-config.sh"
 
 # ── Wipe previous install — clean slate ──────────────────────────────────────
 echo "[Wipe] Removing previous Xray/monitoring install..."

@@ -19,18 +19,30 @@ scrape_configs:
     params:
       module: [tcp_connect]
     static_configs:
-      - targets:
-          - 127.0.0.1:443
-          - 127.0.0.1:48022
+      - targets: ['127.0.0.1:443']
         labels:
           node: 'RU'
-      - targets:
-          - <EU_IP>:443
-          - <EU_IP>:8443
-          - <EU_IP>:9443
-          - <EU_IP>:48022
+          name: '<LOCAL_SNI>'
+      - targets: ['127.0.0.1:48022']
+        labels:
+          node: 'RU'
+          name: 'RU SSH'
+      - targets: ['<EU_IP>:443']
         labels:
           node: 'EU'
+          name: '<SNI_1>'
+      - targets: ['<EU_IP>:8443']
+        labels:
+          node: 'EU'
+          name: '<SNI_2>'
+      - targets: ['<EU_IP>:9443']
+        labels:
+          node: 'EU'
+          name: '<SNI_3>'
+      - targets: ['<EU_IP>:48022']
+        labels:
+          node: 'EU'
+          name: 'EU SSH'
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

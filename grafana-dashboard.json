@@ -72,7 +72,7 @@
       "targets": [
         {
           "expr": "probe_success{job=\"tcp_probes\"}",
-          "legendFormat": "{{instance}}",
+          "legendFormat": "{{name}}",
           "refId": "A"
         }
       ],
