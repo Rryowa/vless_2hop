@@ -153,13 +153,16 @@ echo "[2/12] Prometheus installed and started."
 
 # ── Step 3: Install Grafana OSS ──────────────────────────────────────────────
 echo "[3/12] Installing Grafana OSS..."
-apt install -y apt-transport-https
-mkdir -p /etc/apt/keyrings
-wget -qO /etc/apt/keyrings/grafana.asc https://packages.grafana.com/gpg-full.key
-chmod 644 /etc/apt/keyrings/grafana.asc
-echo "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://mirror.yandex.ru/mirrors/packages.grafana.com/oss stable main" \
-    > /etc/apt/sources.list.d/grafana.list
-apt update && apt install -y grafana
+GRAFANA_DEB=$(curl -sL https://mirror.yandex.ru/mirrors/packages.grafana.com/oss/deb/ \
+    | grep -oP 'grafana_[\d.]+_linux_amd64\.deb' | sort -V | tail -1)
+if [ -z "$GRAFANA_DEB" ]; then
+    echo "ERROR: Could not find Grafana .deb on Yandex mirror."
+    exit 1
+fi
+echo "       Downloading: ${GRAFANA_DEB}"
+wget -q "https://mirror.yandex.ru/mirrors/packages.grafana.com/oss/deb/${GRAFANA_DEB}" -O /tmp/grafana.deb
+dpkg -i /tmp/grafana.deb || apt-get install -f -y
+rm -f /tmp/grafana.deb
 
 # Bind to localhost on port 13000 (nginx will proxy 3000 -> 13000)
 sed -i 's/^;http_addr =.*/http_addr = 127.0.0.1/' /etc/grafana/grafana.ini
