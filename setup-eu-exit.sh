@@ -237,6 +237,7 @@ CRON_JOB="0 3 * * 0 curl -sL -o /usr/local/share/xray/geosite.dat https://github
 (crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat" || true; echo "$CRON_JOB") | crontab -
 
 echo "6. Restarting Xray..."
+chown -R nobody:nogroup /var/log/xray
 systemctl enable xray
 systemctl restart xray
 sleep 3

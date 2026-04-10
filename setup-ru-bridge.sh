@@ -303,6 +303,7 @@ if ! xray -test -c /usr/local/etc/xray/config.json; then
 fi
 
 echo "4. Restarting Xray..."
+chown -R nobody:nogroup /var/log/xray
 systemctl enable xray
 systemctl restart xray
 sleep 3
