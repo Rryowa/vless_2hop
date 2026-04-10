@@ -36,11 +36,20 @@ groups:
         annotations:
           summary: "Node Exporter down: {{ $labels.instance }}"
 
-      - alert: TLSPushMissing
-        expr: absent(tls_probe_success{mode="dpi"})
-        for: 5m
+      - alert: TLSPushStale
+        expr: time() - push_time_seconds{job="tls_probes"} > 120
+        for: 2m
         labels:
           severity: warning
         annotations:
-          summary: "DPI TLS push metrics missing from Pushgateway"
-          description: "No tls_probe_success{mode=dpi} metrics in Pushgateway — tls-push-monitor may be down on RU node"
+          summary: "DPI TLS push metrics stale on {{ $labels.instance }}"
+          description: "Pushgateway metrics for job=tls_probes are older than 120s. tls-push-monitor may be crashed or blocked."
+
+      - alert: CertExpirySoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 3600 / 24 < 15
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSL certificate expiring soon for {{ $labels.instance }}"
+          description: "SSL certificate for {{ $labels.instance }} expires in less than 15 days."

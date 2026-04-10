@@ -74,7 +74,7 @@ EU Node:
   tls-push-monitor.service → POST → RU Pushgateway :9091
 ```
 
-**Dashboard**: Grafana behind nginx HTTPS reverse proxy on port 3000 (Let's Encrypt SSL). Access at `https://<KUMA_DOMAIN>:3000`.
+**Dashboard**: Grafana behind nginx HTTPS reverse proxy on port 3000 (Let's Encrypt SSL). Access at `https://<KUMA_DOMAIN>:3000`. SSL certificate auto-renewed via `certbot.timer` with UFW pre/post hooks.
 
 **Metrics collected:**
 
@@ -88,6 +88,7 @@ EU Node:
 | EU_IP:8443 | EU Xray port 2 |
 | EU_IP:9443 | EU Xray port 3 |
 | EU_IP:48022 | EU SSH |
+| https://<KUMA_DOMAIN>:3000 | Grafana SSL certificate |
 
 *TLS telemetry (Pushgateway — DPI-aware):*
 
@@ -113,15 +114,17 @@ EU Node:
 - **Baseline mode (EU)**: `curl` to real mirror servers, captures `time_appconnect`, pushes to Pushgateway
 - **DPI probe mode (RU)**: `curl --resolve` forces SNI to EU IP on specific port, pushes to Pushgateway
 - Push format: Prometheus text exposition to `<PUSHGATEWAY_URL>/metrics/job/tls_probes/instance/<hostname>/sni/<sni>/mode/<mode>`
+- Uses `-D /dev/null` for robust `curl` output parsing.
 
 **Alert rules** (`prometheus-alerts.yml`):
 - `DPIBlockDetected` — baseline UP + DPI DOWN for same SNI, for 2m → critical
 - `XrayPortDown` — TCP probe failure for 2m → critical
 - `VPSDiskLow` — disk below 10%, for 5m → warning
 - `NodeDown` — Node Exporter unreachable for 2m → critical
-- `TLSPushMissing` — no DPI push metrics in Pushgateway for 5m → warning
+- `TLSPushStale` — no DPI push metrics updated in Pushgateway for 2m → warning
+- `CertExpirySoon` — SSL certificate for `<KUMA_DOMAIN>` expires in < 15 days → warning
 
-**Notifications**: Alertmanager → `bark-webhook.py` (port 9095) → Bark API push.
+**Notifications**: Alertmanager → `bark-webhook.py` (port 9095) → Bark API push. Inhibit rules suppress `XrayPortDown` if `NodeDown` is firing for the same instance.
 
 ## SSH Access After Setup
 

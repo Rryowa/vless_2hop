@@ -19,3 +19,4 @@ inhibit_rules:
       alertname: NodeDown
     target_match:
       alertname: XrayPortDown
+    equal: ['instance']

@@ -58,6 +58,15 @@ rm -rf /etc/alertmanager/
 rm -rf /var/lib/grafana/
 rm -rf /etc/grafana/dashboards/
 rm -rf /var/lib/prometheus/
+
+if command -v ufw &>/dev/null; then
+    ufw delete allow 3000/tcp 2>/dev/null || true
+    ufw delete deny 9091/tcp 2>/dev/null || true
+    # Also attempt to delete any rules that mention 9091 from sources
+    for rule in $(ufw status numbered | grep '9091' | awk -F"[][]" '{print $2}' | sort -rn 2>/dev/null || true); do
+        echo "y" | ufw delete $rule 2>/dev/null || true
+    done
+fi
 rm -f /etc/xray-monitor.env
 rm -f /etc/nginx/sites-enabled/grafana-proxy
 rm -f /etc/nginx/sites-available/grafana-proxy
@@ -101,7 +110,7 @@ id prometheus &>/dev/null || useradd --no-create-home --shell /bin/false prometh
 
 # Create dirs and copy config
 mkdir -p /etc/prometheus /var/lib/prometheus
-sed "s/<EU_IP>/${EU_IP}/g" "$REPO_DIR/prometheus.yml" > /etc/prometheus/prometheus.yml
+sed -e "s/<EU_IP>/${EU_IP}/g" -e "s/<KUMA_DOMAIN>/${KUMA_DOMAIN}/g" "$REPO_DIR/prometheus.yml" > /etc/prometheus/prometheus.yml
 cp "$REPO_DIR/prometheus-alerts.yml" /etc/prometheus/prometheus-alerts.yml
 
 # Blackbox config (written now, used by step 5)
@@ -110,6 +119,10 @@ modules:
   tcp_connect:
     prober: tcp
     timeout: 5s
+  http_2xx:
+    prober: http
+    http:
+      preferred_ip_protocol: "ip4"
 BLACKBOXEOF
 
 chown -R prometheus:prometheus /etc/prometheus /var/lib/prometheus
@@ -457,7 +470,8 @@ fi
 
 echo "       Requesting certificate for ${KUMA_DOMAIN}..."
 certbot certonly --standalone --non-interactive --agree-tos \
-    --register-unsafely-without-email -d "$KUMA_DOMAIN"
+    --register-unsafely-without-email -d "$KUMA_DOMAIN" \
+    --pre-hook "ufw allow 80/tcp" --post-hook "ufw delete allow 80/tcp"
 
 if command -v ufw &>/dev/null; then
     ufw delete allow 80/tcp 2>/dev/null || true
@@ -497,6 +511,7 @@ systemctl enable nginx
 systemctl reload-or-restart nginx
 
 if command -v ufw &>/dev/null; then
+    ufw delete allow 3000/tcp 2>/dev/null || true
     ufw allow 3000/tcp
     echo "       UFW: opened port 3000 (Grafana HTTPS dashboard)"
 fi
@@ -508,10 +523,12 @@ echo "[9/12] nginx HTTPS proxy active: ${KUMA_DOMAIN}:3000 -> 127.0.0.1:13000 (G
 echo "[10/12] Configuring UFW firewall rules..."
 if command -v ufw &>/dev/null; then
     if [ -n "$EU_IP" ]; then
+        ufw delete allow from "$EU_IP" to any port 9091 proto tcp 2>/dev/null || true
         ufw allow from "$EU_IP" to any port 9091 proto tcp
         echo "       UFW: allowed port 9091 (Pushgateway) from ${EU_IP}"
     fi
     # Block all other inbound access to Pushgateway
+    ufw delete deny 9091/tcp 2>/dev/null || true
     ufw deny 9091/tcp 2>/dev/null || true
     echo "       UFW: denied port 9091 from all other sources"
     # Ports 9090, 9093, 9095, 9100, 9115 all bind to 127.0.0.1 — no UFW needed

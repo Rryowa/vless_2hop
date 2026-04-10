@@ -18,7 +18,7 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 0
 fi
 
-source "$ENV_FILE"
+source "$ENV_FILE" 2>/dev/null || true
 
 if [ -z "$TLS_TARGETS" ] || [ -z "$TLS_PUSHGATEWAY_URL" ] || [ -z "$TLS_MODE" ]; then
     exit 0
@@ -32,22 +32,22 @@ while true; do
     IFS=',' read -ra TARGET_LIST <<< "$TLS_TARGETS"
 
     for TARGET in "${TARGET_LIST[@]}"; do
-        HOSTNAME="${TARGET%%:*}"
+        TARGET_HOST="${TARGET%%:*}"
         PORT="${TARGET##*:}"
 
-        SNI_LABEL="${HOSTNAME}"
+        SNI_LABEL="${TARGET_HOST}"
         MODE="${TLS_MODE}"
         PUSH_URL="${TLS_PUSHGATEWAY_URL}/metrics/job/tls_probes/instance/${INSTANCE}/sni/${SNI_LABEL}/mode/${MODE}"
 
         if [ -n "$TLS_RESOLVE_TO" ]; then
-            RESULT=$(curl --resolve "${HOSTNAME}:${PORT}:${TLS_RESOLVE_TO}" \
-                --head -o /dev/null -w "%{time_appconnect}" \
+            RESULT=$(curl --resolve "${TARGET_HOST}:${PORT}:${TLS_RESOLVE_TO}" \
+                -D /dev/null -o /dev/null -w "%{time_appconnect}" \
                 -s --connect-timeout 4 --max-time 5 \
-                "https://${HOSTNAME}:${PORT}" 2>&1)
+                "https://${TARGET_HOST}:${PORT}" 2>&1)
         else
-            RESULT=$(curl --head -o /dev/null -w "%{time_appconnect}" \
+            RESULT=$(curl -D /dev/null -o /dev/null -w "%{time_appconnect}" \
                 -s --connect-timeout 2 --max-time 3 \
-                "https://${HOSTNAME}:${PORT}" 2>&1)
+                "https://${TARGET_HOST}:${PORT}" 2>&1)
         fi
 
         if echo "$RESULT" | grep -qE '^[0-9]+\.?[0-9]*$'; then

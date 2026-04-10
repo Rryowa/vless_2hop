@@ -80,23 +80,67 @@ Replaces the 6 Kuma push monitors. The existing `tls-push-monitor.sh` script nee
 **New push format (from tls-push-monitor.sh):**
 ```bash
 # On success (SNI = debian.snt.utwente.nl, latency = 42ms, mode = baseline):
-cat <<EOF | curl -s --data-binary @- http://127.0.0.1:9091/metrics/job/tls_probes/instance/${HOSTNAME}/sni/debian.snt.utwente.nl/mode/baseline
+# Uses -D /dev/null to ensure robust parsing of connection time.
+cat <<EOF | curl -s -D /dev/null -H "Content-Type: text/plain" --data-binary @- http://127.0.0.1:9091/metrics/job/tls_probes/instance/${INSTANCE}/sni/debian.snt.utwente.nl/mode/baseline
 # TYPE tls_probe_success gauge
 tls_probe_success 1
 # TYPE tls_probe_latency_ms gauge
 tls_probe_latency_ms 42
 EOF
-
-# On failure:
-cat <<EOF | curl -s --data-binary @- http://127.0.0.1:9091/metrics/job/tls_probes/instance/${HOSTNAME}/sni/debian.snt.utwente.nl/mode/baseline
-# TYPE tls_probe_success gauge
-tls_probe_success 0
-# TYPE tls_probe_latency_ms gauge
-tls_probe_latency_ms 0
-EOF
 ```
 
-The `sni` and `mode` path segments become Prometheus labels automatically. The DPI truth matrix (EU-baseline UP + RU-DPI DOWN = block) becomes a simple PromQL alert rule — no custom logic needed.
+The `sni` and `mode` path segments become Prometheus labels automatically. The DPI truth matrix (EU-baseline UP + RU-DPI DOWN = block) becomes a simple PromQL alert rule.
+
+### 2.1 SSL Certificate Monitoring
+Blackbox Exporter is configured with an `http_2xx` module to monitor the Grafana SSL certificate.
+```yaml
+- job_name: cert_probes
+  metrics_path: /probe
+  params:
+    module: [http_2xx]
+  static_configs:
+    - targets:
+        - https://<KUMA_DOMAIN>:3000
+```
+
+---
+
+## Alert Rules
+
+Stored in `prometheus-alerts.yml`, loaded by Prometheus at startup. No UI configuration.
+
+```yaml
+groups:
+  - name: vpn_alerts
+    rules:
+      - alert: DPIBlockDetected
+        expr: tls_probe_success{mode="baseline"} == 1 and on(sni) tls_probe_success{mode="dpi"} == 0
+        for: 2m
+
+      - alert: TLSPushStale
+        expr: time() - push_time_seconds{job="tls_probes"} > 120
+        for: 2m
+        annotations:
+          summary: "DPI TLS push metrics stale on {{ $labels.instance }}"
+
+      - alert: CertExpirySoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 3600 / 24 < 15
+        for: 1h
+```
+
+Alerts route to Bark via Alertmanager + `bark-webhook.py`. Inhibit rules ensure that if a node is down (`NodeDown`), individual port alerts (`XrayPortDown`) for that instance are suppressed.
+
+---
+
+## Security & Reliability Notes
+
+- **Certbot Renewal**: `setup-monitoring.sh` configures `certbot` with `--pre-hook` and `--post-hook` to automatically open and close UFW port 80 during renewal.
+- **UFW Idempotency**: Setup scripts explicitly delete old rules before adding new ones to prevent rule accumulation on re-runs.
+- **Service Security**: `tls-push-monitor.sh` silences source errors when running under the `nobody` user.
+
+---
+
+## Component Mapping (cont.)
 
 ### 3. VPS Resource Monitoring — Node Exporter
 
@@ -131,54 +175,19 @@ Side-by-side per SNI with color thresholds: green (both up), red (baseline up + 
 
 ---
 
-## Alert Rules
-
-Stored in `prometheus-alerts.yml`, loaded by Prometheus at startup. No UI configuration.
-
-```yaml
-groups:
-  - name: vpn_alerts
-    rules:
-      - alert: DPIBlockDetected
-        expr: tls_probe_success{mode="baseline"} == 1 and tls_probe_success{mode="dpi"} == 0
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "DPI block on {{ $labels.sni }}"
-
-      - alert: XrayPortDown
-        expr: probe_success{instance=~".*:443|.*:8443|.*:9443"} == 0
-        for: 2m
-        labels:
-          severity: critical
-
-      - alert: VPSDiskLow
-        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes < 0.10
-        for: 5m
-        labels:
-          severity: warning
-```
-
-Alerts can route to Bark via Alertmanager (single binary, minimal config) or via a small webhook receiver that reuses the existing Bark push logic from `log-capture-webhook.py`.
-
----
-
 ## Files to Create / Modify
 
 | File | Action | Purpose |
 |---|---|---|
-| `setup-monitoring.sh` | **Create** | Installs Prometheus, Grafana, Pushgateway, Node Exporter, Blackbox Exporter on RU node |
-| `setup-node-exporter.sh` | **Create** | Installs Node Exporter on EU node (lightweight, called from `setup-eu-exit.sh`) |
-| `prometheus.yml` | **Create** | Prometheus scrape config — all targets, relabeling, alert rule file path |
-| `prometheus-alerts.yml` | **Create** | Alert rules (DPI block, port down, disk low) |
+| `setup-monitoring.sh` | **Modify** | Installs Prometheus, Grafana, Pushgateway, Node Exporter, Blackbox Exporter on RU node |
+| `setup-node-exporter.sh` | **Modify** | Installs Node Exporter on EU node (lightweight, called from `setup-eu-exit.sh`) |
+| `prometheus.yml` | **Modify** | Prometheus scrape config — all targets, relabeling, alert rule file path |
+| `prometheus-alerts.yml` | **Modify** | Alert rules (DPI block, port down, disk low, stale push, cert expiry) |
 | `grafana-dashboard.json` | **Create** | Provisioned dashboard JSON |
 | `grafana-provisioning/` | **Create** | Grafana datasource + dashboard provisioning YAML |
-| `tls-push-monitor.sh` | **Modify** | Change push format from Kuma query string to Prometheus text exposition format |
-| `setup-eu-exit.sh` | **Modify** | Replace `install-uptime-kuma.sh --remote-push` call with `setup-node-exporter.sh` |
-| `setup-ru-bridge.sh` | **Modify** | Replace `install-uptime-kuma.sh --kuma-host` call with `setup-monitoring.sh` |
-| `install-uptime-kuma.sh` | **Delete** | No longer needed |
-| `configure-kuma.py` | **Delete** | No longer needed |
+| `tls-push-monitor.sh` | **Modify** | TLS handshake telemetry → Prometheus Pushgateway |
+| `setup-eu-exit.sh` | **Modify** | Calls `setup-node-exporter.sh` |
+| `setup-ru-bridge.sh` | **Modify** | Calls `setup-monitoring.sh` |
 
 ---
 
@@ -209,4 +218,6 @@ The monitoring stack (`setup-monitoring.sh`) is called internally by `setup-ru-b
 - `install-uptime-kuma.sh` — entire file deleted
 - `configure-kuma.py` — entire file deleted
 - All Kuma-specific cleanup in `setup-ru-bridge.sh` wipe block (`uptime-kuma`, `log-capture-webhook` service stops/removes)
-- `log-capture-webhook.py` and `log-capture-webhook.service` — can be replaced by Alertmanager webhook receiver or kept as a standalone Bark notifier triggered by Alertmanager
+- `log-capture-webhook.py` and `log-capture-webhook.service` — replaced by Alertmanager webhook receiver (`bark-webhook.py`)
+
+

@@ -41,6 +41,11 @@ rm -f /etc/nginx/sites-available/grafana-proxy
 rm -f /etc/xray-monitor.env
 rm -f /etc/xray-kuma.env
 rm -rf /var/log/xray
+
+if command -v ufw &>/dev/null; then
+    ufw delete allow 443/tcp 2>/dev/null || true
+fi
+
 (crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat" || true) | crontab -
 systemctl daemon-reload
 echo "[Wipe] Done."

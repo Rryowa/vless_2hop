@@ -60,7 +60,7 @@ LINKS_FILE="/usr/local/etc/xray/user_links.txt"
 if [ -f "$LINKS_FILE" ]; then
     # Escape regex metacharacters in username to prevent injection (e.g. '.' or '/')
     SAFE_USER=$(printf '%s' "$USERNAME" | sed 's/[]\.*^$()[+?{|/]/\\&/g')
-    sed -i "s|.*${SAFE_USER}:.*|[REVOKED] &|" "$LINKS_FILE"
+    sed -i "s~.*${SAFE_USER}:.*~[REVOKED] &~" "$LINKS_FILE"
     echo "Marked as revoked in $LINKS_FILE."
 fi
 echo "=========================================================="
