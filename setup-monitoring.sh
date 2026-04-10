@@ -20,9 +20,10 @@ fi
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
-[ -z "$EU_IP" ]       && read -rp "Enter EU VPS IP: " EU_IP
-[ -z "$KUMA_DOMAIN" ] && read -rp "Enter monitoring domain (e.g., rryo.mooo.com): " KUMA_DOMAIN
-[ -z "$BARK_KEY" ]    && read -rp "Enter BARK_KEY (leave blank to skip notifications): " BARK_KEY
+[ -z "$EU_IP" ]          && read -rp "Enter EU VPS IP: " EU_IP
+[ -z "$KUMA_DOMAIN" ]    && read -rp "Enter monitoring domain (e.g., rryo.mooo.com): " KUMA_DOMAIN
+[ -z "$BARK_KEY" ]       && read -rp "Enter BARK_KEY (leave blank to skip notifications): " BARK_KEY
+[ -z "$GRAFANA_PASSWORD" ] && read -rsp "Enter Grafana admin password: " GRAFANA_PASSWORD && echo
 
 if [ -z "$EU_IP" ]; then
     echo "ERROR: EU_IP is required."
@@ -183,6 +184,13 @@ cp "$REPO_DIR/grafana-dashboard.json"               /etc/grafana/dashboards/
 chown -R grafana:grafana /etc/grafana/provisioning /etc/grafana/dashboards
 
 systemctl enable --now grafana-server
+
+# Set admin password if provided
+if [ -n "$GRAFANA_PASSWORD" ]; then
+    sleep 3  # wait for Grafana to finish starting
+    grafana-cli --homepath /usr/share/grafana admin reset-admin-password "$GRAFANA_PASSWORD" 2>/dev/null \
+        || echo "       Warning: could not set Grafana password — change it manually in the UI."
+fi
 echo "[3/12] Grafana installed and started on 127.0.0.1:13000."
 
 # ── Step 4: Install Pushgateway ──────────────────────────────────────────────
@@ -557,7 +565,7 @@ echo ""
 echo "=========================================================="
 echo "         MONITORING STACK INSTALLED (RU NODE)            "
 echo "=========================================================="
-echo "Grafana dashboard: https://${KUMA_DOMAIN}:3000"
+echo "Grafana dashboard: https://${KUMA_DOMAIN}:3000  (admin / ${GRAFANA_PASSWORD:-admin})"
 echo "Prometheus:        http://127.0.0.1:9090 (local only)"
 echo "Pushgateway:       http://0.0.0.0:9091 (EU IP whitelisted)"
 echo "Alertmanager:      http://127.0.0.1:9093 (local only)"

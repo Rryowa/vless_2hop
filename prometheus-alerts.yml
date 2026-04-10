@@ -20,7 +20,7 @@ groups:
           description: "TCP probe failed for {{ $labels.instance }}"
 
       - alert: VPSDiskLow
-        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.10
+        expr: node_filesystem_avail_bytes{mountpoint="/",fstype!~"rootfs|tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"rootfs|tmpfs|overlay"} < 0.10
         for: 5m
         labels:
           severity: warning
@@ -37,7 +37,7 @@ groups:
           summary: "Node Exporter down: {{ $labels.instance }}"
 
       - alert: TLSPushStale
-        expr: time() - push_time_seconds{job="tls_probes"} > 120
+        expr: time() - push_time_seconds{job="tls_probes", mode="dpi"} > 120
         for: 2m
         labels:
           severity: warning
@@ -47,7 +47,7 @@ groups:
 
       - alert: CertExpirySoon
         expr: (probe_ssl_earliest_cert_expiry - time()) / 3600 / 24 < 15
-        for: 1h
+        for: 5m
         labels:
           severity: warning
         annotations:

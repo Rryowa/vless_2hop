@@ -22,10 +22,15 @@ scrape_configs:
       - targets:
           - 127.0.0.1:443
           - 127.0.0.1:48022
+        labels:
+          node: 'RU'
+      - targets:
           - <EU_IP>:443
           - <EU_IP>:8443
           - <EU_IP>:9443
           - <EU_IP>:48022
+        labels:
+          node: 'EU'
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -42,10 +47,14 @@ scrape_configs:
   - job_name: node_ru
     static_configs:
       - targets: ['127.0.0.1:9100']
+        labels:
+          node: 'RU'
 
   - job_name: node_eu
     static_configs:
       - targets: ['<EU_IP>:9100']
+        labels:
+          node: 'EU'
 
   - job_name: cert_probes
     metrics_path: /probe
