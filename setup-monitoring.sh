@@ -57,9 +57,8 @@ rm -f /usr/local/bin/bark-webhook.py
 rm -f /usr/local/bin/tls-push-monitor.sh
 rm -rf /etc/prometheus/
 rm -rf /etc/alertmanager/
-rm -rf /usr/share/grafana/
 rm -rf /var/lib/grafana/
-rm -rf /etc/grafana/
+rm -rf /etc/grafana/dashboards/
 rm -rf /var/lib/prometheus/
 
 if command -v ufw &>/dev/null; then
@@ -174,63 +173,32 @@ echo "[2/12] Prometheus installed and started."
 
 # ── Step 3: Install Grafana OSS ──────────────────────────────────────────────
 echo "[3/12] Installing Grafana OSS..."
-GRAFANA_VERSION=$(github_latest_version grafana/grafana)
-if [ -z "$GRAFANA_VERSION" ]; then
-    echo "ERROR: Could not determine latest Grafana version."
-    exit 1
-fi
-echo "       Version: ${GRAFANA_VERSION}"
+echo "deb [trusted=yes] https://mirror.yandex.ru/mirrors/packages.grafana.com/oss/deb stable main" \
+    > /etc/apt/sources.list.d/grafana.list
+apt-get update -qq
 
-curl -sL "https://github.com/grafana/grafana/releases/download/${GRAFANA_VERSION}/grafana-${GRAFANA_VERSION#v}.linux-amd64.tar.gz" \
-    | tar -xz -C /tmp/
+# Prevent apt post-install from starting Grafana and partially initialising
+# the SQLite database — that causes migration conflicts on first real start.
+echo "exit 101" > /usr/sbin/policy-rc.d
+chmod +x /usr/sbin/policy-rc.d
+apt-get install -y grafana
+rm -f /usr/sbin/policy-rc.d
 
-id grafana &>/dev/null || useradd --no-create-home --shell /bin/false --system grafana
+# Ensure no stale db exists before first start
+rm -f /var/lib/grafana/grafana.db
 
-mkdir -p /usr/share/grafana \
-         /var/lib/grafana \
-         /var/log/grafana \
-         /etc/grafana/provisioning/datasources \
+# Bind to localhost on port 13000 (nginx will proxy 3000 -> 13000)
+sed -i 's/^;*http_addr =.*/http_addr = 127.0.0.1/' /etc/grafana/grafana.ini
+sed -i 's/^;*http_port =.*/http_port = 13000/'      /etc/grafana/grafana.ini
+
+# Provisioning
+mkdir -p /etc/grafana/provisioning/datasources \
          /etc/grafana/provisioning/dashboards \
          /etc/grafana/dashboards
-
-cp -r "/tmp/grafana-${GRAFANA_VERSION#v}/." /usr/share/grafana/
-rm -rf "/tmp/grafana-${GRAFANA_VERSION#v}"
-
-cat > /etc/grafana/grafana.ini << 'GRAFANA_INI'
-[server]
-http_addr = 127.0.0.1
-http_port = 13000
-
-[paths]
-data = /var/lib/grafana
-logs = /var/log/grafana
-plugins = /var/lib/grafana/plugins
-provisioning = /etc/grafana/provisioning
-GRAFANA_INI
-
 cp "$REPO_DIR/grafana-provisioning/datasource.yml"  /etc/grafana/provisioning/datasources/
 cp "$REPO_DIR/grafana-provisioning/dashboard.yml"   /etc/grafana/provisioning/dashboards/
 cp "$REPO_DIR/grafana-dashboard.json"               /etc/grafana/dashboards/
-chown -R grafana:grafana /usr/share/grafana /var/lib/grafana /var/log/grafana /etc/grafana
-
-cat > /etc/systemd/system/grafana-server.service << 'EOF'
-[Unit]
-Description=Grafana
-After=network.target
-
-[Service]
-Type=simple
-User=grafana
-Group=grafana
-ExecStart=/usr/share/grafana/bin/grafana server \
-    --config=/etc/grafana/grafana.ini \
-    --homepath=/usr/share/grafana
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
+chown -R grafana:grafana /etc/grafana/provisioning /etc/grafana/dashboards
 
 systemctl daemon-reload
 systemctl enable --now grafana-server
@@ -238,10 +206,7 @@ systemctl enable --now grafana-server
 # Set admin password if provided
 if [ -n "$GRAFANA_PASSWORD" ]; then
     sleep 5  # wait for Grafana to finish starting
-    /usr/share/grafana/bin/grafana cli \
-        --homepath /usr/share/grafana \
-        --config /etc/grafana/grafana.ini \
-        admin reset-admin-password "$GRAFANA_PASSWORD" 2>/dev/null \
+    grafana-cli --homepath /usr/share/grafana admin reset-admin-password "$GRAFANA_PASSWORD" 2>/dev/null \
         || echo "       Warning: could not set Grafana password — change it manually in the UI."
 fi
 echo "[3/12] Grafana installed and started on 127.0.0.1:13000."
