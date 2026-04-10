@@ -94,7 +94,7 @@ IP=$(curl -4 -s https://ifconfig.me)
 
 echo "3. Creating Xray Bridge Configuration..."
 mkdir -p /var/log/xray
-chown nobody:nogroup /var/log/xray
+chown -R nobody:nogroup /var/log/xray
 
 # Setup log rotation to prevent SSD space exhaustion
 cat > /etc/logrotate.d/xray << 'EOF'
@@ -286,7 +286,7 @@ XRAY_EOF
 
 # Apply correct config settings
 echo "3.1. Modifying Configuration..."
-mkdir -p /etc/systemd/system/xray.service.d/ && printf '[Service]\nRestart=always\nRestartSec=5\n' | tee /etc/systemd/system/xray.service.d/override.conf > /dev/null && systemctl daemon-reload
+mkdir -p /etc/systemd/system/xray.service.d/ && printf '[Service]\nRestart=always\nRestartSec=5\nRestartPreventExitStatus=\n' | tee /etc/systemd/system/xray.service.d/override.conf > /dev/null && systemctl daemon-reload
 
 echo "3.2. Downloading Runet routing databases & configuring auto-updates..."
 mkdir -p /usr/local/share/xray
@@ -303,9 +303,16 @@ if ! xray -test -c /usr/local/etc/xray/config.json; then
 fi
 
 echo "4. Restarting Xray..."
+systemctl enable xray
 systemctl restart xray
-sleep 2
-echo "[PASS] Xray is running correctly!"
+sleep 3
+if systemctl is-active --quiet xray; then
+    echo "[PASS] Xray is running correctly!"
+else
+    echo "[FAIL] Xray failed to start!"
+    journalctl -u xray --no-pager -n 15
+    exit 1
+fi
 
 # Share Link for RU Bridge (VLESS Reality Vision TCP)
 PUB_URLSAFE=$(echo "$RU_PUB" | tr '+/' '-_' | tr -d '=')

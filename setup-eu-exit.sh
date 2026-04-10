@@ -75,7 +75,7 @@ IP=$(curl -4 -s https://ifconfig.me)
 
 echo "4. Creating Xray Server Configuration..."
 mkdir -p /var/log/xray
-chown nobody:nogroup /var/log/xray
+chown -R nobody:nogroup /var/log/xray
 
 # Setup log rotation to prevent SSD space exhaustion
 cat > /etc/logrotate.d/xray << 'EOF'
@@ -219,7 +219,7 @@ fi
 
 # Apply correct config settings
 echo "5.1. Modifying Configuration..."
-mkdir -p /etc/systemd/system/xray.service.d/ && printf '[Service]\nRestart=always\nRestartSec=5\n' | tee /etc/systemd/system/xray.service.d/override.conf > /dev/null && systemctl daemon-reload
+mkdir -p /etc/systemd/system/xray.service.d/ && printf '[Service]\nRestart=always\nRestartSec=5\nRestartPreventExitStatus=\n' | tee /etc/systemd/system/xray.service.d/override.conf > /dev/null && systemctl daemon-reload
 
 echo "5.2. Downloading Runet routing databases & configuring auto-updates..."
 mkdir -p /usr/local/share/xray
@@ -237,8 +237,16 @@ CRON_JOB="0 3 * * 0 curl -sL -o /usr/local/share/xray/geosite.dat https://github
 (crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat" || true; echo "$CRON_JOB") | crontab -
 
 echo "6. Restarting Xray..."
+systemctl enable xray
 systemctl restart xray
-sleep 2
+sleep 3
+if systemctl is-active --quiet xray; then
+    echo "[PASS] Xray is running correctly!"
+else
+    echo "[FAIL] Xray failed to start!"
+    journalctl -u xray --no-pager -n 15
+    exit 1
+fi
 
 # Convert Base64 to Base64URL (natively supported by Xray, immune to URL parser bugs)
 PBK_URLSAFE=$(echo "$PUBLIC_KEY" | tr '+/' '-_' | tr -d '=')
@@ -262,7 +270,6 @@ echo "SHARABLE VLESS LINK (Copy & Import):"
 echo -e "\e[32m$SHARE_LINK\e[0m"
 echo "✅ Link saved to: $LINKS_FILE"
 echo "=========================================================="
-echo "[PASS] Xray is running correctly!"
 
 echo "7. Installing Node Exporter..."
 RU_IP="$RU_IP" bash "$(dirname "$0")/setup-node-exporter.sh"
