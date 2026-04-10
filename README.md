@@ -40,7 +40,7 @@ Client → RU Bridge VPS (:443, VLESS+Reality+Vision+TCP)
    bash setup-vps.sh
    ```
    *Paste your SSH public key when prompted.*
-4. **Reconnect on port 48022:** `ssh -p 48022 -i <key> root@<IP>`
+4. **Reconnect on port 48022:** `ssh -p 48022 -i "$env:USERPROFILE\.ssh\vps_key" root@<IP>`
 
 ### Phase 1: EU Exit Node
 

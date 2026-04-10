@@ -98,8 +98,7 @@ fi
 echo "       Version: ${PROM_VERSION}"
 
 curl -sL "https://github.com/prometheus/prometheus/releases/download/${PROM_VERSION}/prometheus-${PROM_VERSION#v}.linux-amd64.tar.gz" \
-    -o /tmp/prometheus.tar.gz
-tar -xzf /tmp/prometheus.tar.gz -C /tmp/
+    | tar -xz -C /tmp/
 cp "/tmp/prometheus-${PROM_VERSION#v}.linux-amd64/prometheus" /usr/local/bin/prometheus
 cp "/tmp/prometheus-${PROM_VERSION#v}.linux-amd64/promtool"   /usr/local/bin/promtool
 chmod +x /usr/local/bin/prometheus /usr/local/bin/promtool
@@ -188,8 +187,7 @@ fi
 echo "       Version: ${PGW_VERSION}"
 
 curl -sL "https://github.com/prometheus/pushgateway/releases/download/${PGW_VERSION}/pushgateway-${PGW_VERSION#v}.linux-amd64.tar.gz" \
-    -o /tmp/pushgateway.tar.gz
-tar -xzf /tmp/pushgateway.tar.gz -C /tmp/
+    | tar -xz -C /tmp/
 cp "/tmp/pushgateway-${PGW_VERSION#v}.linux-amd64/pushgateway" /usr/local/bin/pushgateway
 chmod +x /usr/local/bin/pushgateway
 rm -rf /tmp/pushgateway*
@@ -226,8 +224,7 @@ fi
 echo "       Version: ${BB_VERSION}"
 
 curl -sL "https://github.com/prometheus/blackbox_exporter/releases/download/${BB_VERSION}/blackbox_exporter-${BB_VERSION#v}.linux-amd64.tar.gz" \
-    -o /tmp/blackbox_exporter.tar.gz
-tar -xzf /tmp/blackbox_exporter.tar.gz -C /tmp/
+    | tar -xz -C /tmp/
 cp "/tmp/blackbox_exporter-${BB_VERSION#v}.linux-amd64/blackbox_exporter" /usr/local/bin/blackbox_exporter
 chmod +x /usr/local/bin/blackbox_exporter
 rm -rf /tmp/blackbox_exporter*
@@ -265,8 +262,7 @@ fi
 echo "       Version: ${NE_VERSION}"
 
 curl -sL "https://github.com/prometheus/node_exporter/releases/download/${NE_VERSION}/node_exporter-${NE_VERSION#v}.linux-amd64.tar.gz" \
-    -o /tmp/node_exporter.tar.gz
-tar -xzf /tmp/node_exporter.tar.gz -C /tmp/
+    | tar -xz -C /tmp/
 cp "/tmp/node_exporter-${NE_VERSION#v}.linux-amd64/node_exporter" /usr/local/bin/node_exporter
 chmod +x /usr/local/bin/node_exporter
 rm -rf /tmp/node_exporter*
@@ -303,8 +299,7 @@ fi
 echo "       Version: ${AM_VERSION}"
 
 curl -sL "https://github.com/prometheus/alertmanager/releases/download/${AM_VERSION}/alertmanager-${AM_VERSION#v}.linux-amd64.tar.gz" \
-    -o /tmp/alertmanager.tar.gz
-tar -xzf /tmp/alertmanager.tar.gz -C /tmp/
+    | tar -xz -C /tmp/
 cp "/tmp/alertmanager-${AM_VERSION#v}.linux-amd64/alertmanager" /usr/local/bin/alertmanager
 cp "/tmp/alertmanager-${AM_VERSION#v}.linux-amd64/amtool"       /usr/local/bin/amtool
 chmod +x /usr/local/bin/alertmanager /usr/local/bin/amtool
