@@ -30,6 +30,24 @@ read -p "Enter RU Bridge VPS IP (leave blank to skip peer monitors): " RU_IP
 read -p "Enter Kuma dashboard domain (e.g., rryo.mooo.com): " KUMA_DOMAIN
 echo "=========================================================="
 
+# ── Wipe previous install — clean slate ──────────────────────────────────────
+echo "[Wipe] Removing previous Xray/monitoring install..."
+systemctl stop xray tls-push-monitor 2>/dev/null || true
+systemctl disable xray tls-push-monitor 2>/dev/null || true
+rm -f /etc/systemd/system/tls-push-monitor.service
+rm -f /etc/systemd/system/xray.service.d/override.conf
+rmdir /etc/systemd/system/xray.service.d 2>/dev/null || true
+rm -f /usr/local/etc/xray/config.json
+rm -f /usr/local/etc/xray/user_links.txt
+rm -f /etc/logrotate.d/xray
+rm -f /usr/local/bin/tls-push-monitor.sh
+rm -f /etc/xray-kuma.env
+rm -rf /var/log/xray
+(crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat" || true) | crontab -
+systemctl daemon-reload
+echo "[Wipe] Done."
+# ─────────────────────────────────────────────────────────────────────────────
+
 echo "1. Checking/Installing Dependencies..."
 apt update && apt install -y git curl openssl cron jq
 

@@ -22,6 +22,18 @@ if [ -z "$PUB_KEY" ]; then
     exit 1
 fi
 
+# ── Wipe previous install — clean slate ──────────────────────────────────────
+# Restore original sshd_config from backup so sed substitutions apply cleanly
+if [ -f /etc/ssh/sshd_config.bak ]; then
+    cp /etc/ssh/sshd_config.bak /etc/ssh/sshd_config
+fi
+# Remove any previously added UFW rules so we don't accumulate duplicates
+if command -v ufw &>/dev/null; then
+    ufw delete allow 48022/tcp 2>/dev/null || true
+    ufw delete allow 443/tcp   2>/dev/null || true
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 echo "[1/5] Setting up SSH keys for root..."
 mkdir -p /root/.ssh
 echo "$PUB_KEY" > /root/.ssh/authorized_keys

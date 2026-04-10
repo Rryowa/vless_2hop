@@ -65,6 +65,17 @@ if [ "$REMOTE_PUSH" = true ]; then
     fi
     RU_IP="${RU_IP:-$PEER_IP}"
 
+    # ── Wipe previous install — clean slate ──────────────────────────────────
+    echo "[Wipe] Removing previous tls-push-monitor install..."
+    systemctl stop tls-push-monitor 2>/dev/null || true
+    systemctl disable tls-push-monitor 2>/dev/null || true
+    rm -f /etc/systemd/system/tls-push-monitor.service
+    rm -f /usr/local/bin/tls-push-monitor.sh
+    rm -f /etc/xray-kuma.env
+    systemctl daemon-reload
+    echo "[Wipe] Done."
+    # ─────────────────────────────────────────────────────────────────────────
+
     if [ ! -f /etc/xray-kuma.env ]; then
         echo "[TLS] Writing env file template..."
         cat > /etc/xray-kuma.env << EOF
@@ -112,6 +123,25 @@ fi
 
 KUMA_DIR="/opt/uptime-kuma"
 
+# ── Wipe previous install — clean slate ──────────────────────────────────────
+echo "[Wipe] Removing previous Kuma/monitoring install..."
+systemctl stop uptime-kuma log-capture-webhook tls-push-monitor nginx 2>/dev/null || true
+systemctl disable uptime-kuma log-capture-webhook tls-push-monitor nginx 2>/dev/null || true
+rm -f /etc/systemd/system/uptime-kuma.service
+rm -f /etc/systemd/system/log-capture-webhook.service
+rm -f /etc/systemd/system/tls-push-monitor.service
+rm -f /usr/local/bin/tls-push-monitor.sh
+rm -f /opt/log-capture-webhook.py
+rm -rf "$KUMA_DIR"
+rm -f /etc/nginx/sites-enabled/kuma-proxy
+rm -f /etc/nginx/sites-available/kuma-proxy
+rm -f /etc/xray-kuma.env
+rm -f /tmp/xray-kuma-env-eu-baseline
+(crontab -l 2>/dev/null | grep -v "xray/incidents" || true) | crontab -
+systemctl daemon-reload
+echo "[Wipe] Done."
+# ─────────────────────────────────────────────────────────────────────────────
+
 read -rp "Kuma admin username: " KUMA_USER
 read -rsp "Kuma admin password: " KUMA_PASS
 echo
@@ -141,7 +171,6 @@ pip3 install --break-system-packages --quiet uptime-kuma-api
 
 # ── 2. Uptime Kuma ────────────────────────────────────────────────────────────
 echo "[Kuma] Cloning Uptime Kuma..."
-rm -rf "$KUMA_DIR"
 git clone https://github.com/louislam/uptime-kuma.git "$KUMA_DIR"
 
 echo "[Kuma] Running npm setup (this may take a minute)..."
@@ -149,6 +178,13 @@ cd "$KUMA_DIR"
 npm run setup --silent
 
 mkdir -p "$KUMA_DIR/data"
+
+# Pre-seed db-config.json so Kuma 2.x skips the interactive setup wizard
+# and starts in normal mode immediately (otherwise it waits for user action).
+if [ ! -f "$KUMA_DIR/data/db-config.json" ]; then
+    echo '{"dbType":"sqlite"}' > "$KUMA_DIR/data/db-config.json"
+fi
+
 chown -R nobody:nogroup "$KUMA_DIR/data"
 chmod 755 "$KUMA_DIR/data"
 
@@ -175,6 +211,10 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
+
+# Stop nginx if already running so it doesn't hold port 3001 before Kuma starts
+systemctl stop nginx 2>/dev/null || true
+
 systemctl enable --now uptime-kuma
 
 # ── 4. Wait for Kuma to be ready ─────────────────────────────────────────────

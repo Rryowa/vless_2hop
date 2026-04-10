@@ -20,6 +20,30 @@ PORT_1=443
 PORT_2=8443
 PORT_3=9443
 
+# ── Wipe previous install — clean slate ──────────────────────────────────────
+echo "[Wipe] Removing previous Xray/Kuma/monitoring install..."
+systemctl stop xray uptime-kuma log-capture-webhook tls-push-monitor nginx 2>/dev/null || true
+systemctl disable xray uptime-kuma log-capture-webhook tls-push-monitor nginx 2>/dev/null || true
+rm -f /etc/systemd/system/uptime-kuma.service
+rm -f /etc/systemd/system/log-capture-webhook.service
+rm -f /etc/systemd/system/tls-push-monitor.service
+rm -f /etc/systemd/system/xray.service.d/override.conf
+rmdir /etc/systemd/system/xray.service.d 2>/dev/null || true
+rm -f /usr/local/etc/xray/config.json
+rm -f /usr/local/etc/xray/user_links.txt
+rm -f /etc/logrotate.d/xray
+rm -f /usr/local/bin/tls-push-monitor.sh
+rm -f /etc/xray-kuma.env
+rm -f /opt/log-capture-webhook.py
+rm -rf /opt/uptime-kuma
+rm -f /etc/nginx/sites-enabled/kuma-proxy
+rm -f /etc/nginx/sites-available/kuma-proxy
+rm -rf /var/log/xray
+(crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat\|xray/incidents" || true) | crontab -
+systemctl daemon-reload
+echo "[Wipe] Done."
+# ─────────────────────────────────────────────────────────────────────────────
+
 echo "Checking/Installing Dependencies (jq, curl, openssl)..."
 apt update && apt install -y git curl openssl cron jq
 
