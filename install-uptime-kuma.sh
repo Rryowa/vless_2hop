@@ -244,7 +244,20 @@ echo "[Nginx] Moving Kuma to port 13001 (nginx proxies 3001 -> 13001)..."
 sed -i 's/--port=3001/--port=13001/' /etc/systemd/system/uptime-kuma.service
 systemctl daemon-reload
 systemctl restart uptime-kuma
-sleep 3
+
+echo "[Nginx] Waiting for Kuma on port 13001..."
+for i in $(seq 1 15); do
+    if curl -sf http://127.0.0.1:13001 > /dev/null 2>&1; then
+        echo "[Nginx] Kuma ready on port 13001."
+        break
+    fi
+    sleep 2
+    if [ "$i" -eq 15 ]; then
+        echo "[Nginx] ERROR: Kuma did not start on port 13001."
+        journalctl -u uptime-kuma --no-pager -n 20
+        exit 1
+    fi
+done
 
 nginx -t
 systemctl enable nginx
