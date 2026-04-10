@@ -1,18 +1,18 @@
 #!/bin/bash
-# tls-push-monitor — TLS handshake telemetry for Uptime Kuma push monitors.
+# tls-push-monitor — TLS handshake telemetry pushed to Prometheus Pushgateway.
 #
 # Runs as a systemd service with a 30-second sleep loop between runs.
-# Mode is auto-detected from /etc/xray-kuma.env:
-#   - TLS_RESOLVE_TO empty → Baseline mode (EU node): tests real mirror servers on port 443
-#   - TLS_RESOLVE_TO set   → DPI probe mode (RU node): tests EU proxy ports with --resolve
+# Mode is determined by TLS_MODE in /etc/xray-monitor.env:
+#   - TLS_MODE=baseline → EU node mode: tests real mirror servers on port 443
+#   - TLS_MODE=dpi      → RU node mode: tests EU proxy ports with --resolve
 #
-# Env file variables:
-#   TLS_TARGETS     — comma-separated host:port pairs
-#   TLS_RESOLVE_TO  — EU VPS IP (empty = baseline mode)
-#   TLS_PUSH_TOKENS — JSON map of host:port → push token
-#   KUMA_PUSH_URL   — base URL for Kuma push API
+# Env file variables (/etc/xray-monitor.env):
+#   TLS_TARGETS          — comma-separated host:port pairs
+#   TLS_RESOLVE_TO       — EU VPS IP (only set in DPI mode; empty in baseline)
+#   TLS_MODE             — "baseline" or "dpi"
+#   TLS_PUSHGATEWAY_URL  — base URL of Pushgateway, e.g. http://127.0.0.1:9091
 
-ENV_FILE="/etc/xray-kuma.env"
+ENV_FILE="/etc/xray-monitor.env"
 
 if [ ! -f "$ENV_FILE" ]; then
     exit 0
@@ -20,62 +20,56 @@ fi
 
 source "$ENV_FILE"
 
-if [ -z "$TLS_TARGETS" ] || [ -z "$TLS_PUSH_TOKENS" ] || [ -z "$KUMA_PUSH_URL" ]; then
+if [ -z "$TLS_TARGETS" ] || [ -z "$TLS_PUSHGATEWAY_URL" ] || [ -z "$TLS_MODE" ]; then
     exit 0
 fi
 
-TOKEN_LOOKUP=$(TLS_PUSH_TOKENS="$TLS_PUSH_TOKENS" python3 << 'PYEOF'
-import json, os, sys
-raw = os.environ.get("TLS_PUSH_TOKENS", "")
-if not raw:
-    sys.exit(0)
-try:
-    m = json.loads(raw)
-except:
-    sys.exit(0)
-for target, token in m.items():
-    print(f'{target}\t{token}')
-PYEOF
-)
+INSTANCE=$(hostname -f 2>/dev/null)
+[ -z "$INSTANCE" ] && INSTANCE=$(hostname -s 2>/dev/null)
+[ -z "$INSTANCE" ] && INSTANCE="unknown"
 
-if [ -z "$TOKEN_LOOKUP" ]; then
-    exit 0
-fi
+while true; do
+    IFS=',' read -ra TARGET_LIST <<< "$TLS_TARGETS"
 
-declare -A TOKENS
-while IFS=$'\t' read -r TARGET TOKEN; do
-    TOKENS["$TARGET"]="$TOKEN"
-done <<< "$TOKEN_LOOKUP"
+    for TARGET in "${TARGET_LIST[@]}"; do
+        HOSTNAME="${TARGET%%:*}"
+        PORT="${TARGET##*:}"
 
-IFS=',' read -ra TARGET_LIST <<< "$TLS_TARGETS"
+        SNI_LABEL="${HOSTNAME}"
+        MODE="${TLS_MODE}"
+        PUSH_URL="${TLS_PUSHGATEWAY_URL}/metrics/job/tls_probes/instance/${INSTANCE}/sni/${SNI_LABEL}/mode/${MODE}"
 
-for TARGET in "${TARGET_LIST[@]}"; do
-    HOSTNAME="${TARGET%%:*}"
-    PORT="${TARGET##*:}"
-
-    TOKEN="${TOKENS[$TARGET]}"
-    [ -z "$TOKEN" ] && continue
-
-    if [ -n "$TLS_RESOLVE_TO" ]; then
-        RESULT=$(curl --resolve "${HOSTNAME}:${PORT}:${TLS_RESOLVE_TO}" \
-            --head -o /dev/null -w "%{time_appconnect}" \
-            -s --connect-timeout 4 --max-time 5 \
-            "https://${HOSTNAME}:${PORT}" 2>&1)
-        FAIL_MSG="dpi_blocked"
-    else
-        RESULT=$(curl --head -o /dev/null -w "%{time_appconnect}" \
-            -s --connect-timeout 2 --max-time 3 \
-            "https://${HOSTNAME}" 2>&1)
-        FAIL_MSG="mirror_offline"
-    fi
-
-    if echo "$RESULT" | grep -qE '^[0-9]+\.?[0-9]*$'; then
-        MS=$(echo "$RESULT" | awk '{printf "%.0f", $1 * 1000}')
-        if [ "$MS" -gt 0 ] 2>/dev/null; then
-            curl -sf "${KUMA_PUSH_URL}/api/push/${TOKEN}?status=up&ping=${MS}" > /dev/null 2>&1
-            continue
+        if [ -n "$TLS_RESOLVE_TO" ]; then
+            RESULT=$(curl --resolve "${HOSTNAME}:${PORT}:${TLS_RESOLVE_TO}" \
+                --head -o /dev/null -w "%{time_appconnect}" \
+                -s --connect-timeout 4 --max-time 5 \
+                "https://${HOSTNAME}:${PORT}" 2>&1)
+        else
+            RESULT=$(curl --head -o /dev/null -w "%{time_appconnect}" \
+                -s --connect-timeout 2 --max-time 3 \
+                "https://${HOSTNAME}:${PORT}" 2>&1)
         fi
-    fi
 
-    curl -sf "${KUMA_PUSH_URL}/api/push/${TOKEN}?status=down&msg=${FAIL_MSG}" > /dev/null 2>&1
+        if echo "$RESULT" | grep -qE '^[0-9]+\.?[0-9]*$'; then
+            MS=$(echo "$RESULT" | awk '{printf "%.0f", $1 * 1000}')
+            if [ "$MS" -gt 0 ] 2>/dev/null; then
+                curl -s -H "Content-Type: text/plain; version=0.0.4; charset=utf-8" --data-binary @- "${PUSH_URL}" << EOF
+# TYPE tls_probe_success gauge
+tls_probe_success 1
+# TYPE tls_probe_latency_ms gauge
+tls_probe_latency_ms ${MS}
+EOF
+                continue
+            fi
+        fi
+
+        curl -s -H "Content-Type: text/plain; version=0.0.4; charset=utf-8" --data-binary @- "${PUSH_URL}" << EOF
+# TYPE tls_probe_success gauge
+tls_probe_success 0
+# TYPE tls_probe_latency_ms gauge
+tls_probe_latency_ms 0
+EOF
+    done
+
+    sleep 30
 done

@@ -17,10 +17,8 @@ Both nodes run Xray-core. All scripts must be executed **on the remote VPS** (no
 Run scripts in this sequence — later scripts depend on output from earlier ones:
 
 1. **`setup-vps.sh <pubkey>`** — Run on each VPS first. Configures root key-only SSH on port 48022, enables UFW (ports 48022 + 443), installs fail2ban.
-2. **`setup-eu-exit.sh`** — Run on EU VPS. Installs Xray with 3 VLESS+Reality+XHTTP inbounds on ports 443/8443/9443 (one per SNI, matched dest). Prints UUID, Public Key, and Short ID — **copy these**.
-3. **`setup-ru-bridge.sh`** — Run on RU VPS. Prompts for EU credentials from step 2. Sets up VLESS+Reality+Vision inbound with 3 outbound SNI targets on ports 443/8443/9443 load-balanced via `leastPing`.
-4. **`install-uptime-kuma.sh --kuma-host`** — Run on RU VPS. Full Kuma install + monitoring. Prints EU baseline env file.
-5. **`install-uptime-kuma.sh --remote-push`** — Run on EU VPS. Lightweight: env file + tls-push-monitor only (no Kuma). Copy baseline env from step 4.
+2. **`setup-eu-exit.sh`** — Run on EU VPS. Installs Xray with 3 VLESS+Reality+XHTTP inbounds on ports 443/8443/9443 (one per SNI, matched dest). Prints UUID, Public Key, and Short ID — **copy these**. Also installs Node Exporter and tls-push-monitor (baseline mode).
+3. **`setup-ru-bridge.sh`** — Run on RU VPS. Prompts for EU credentials from step 2. Sets up VLESS+Reality+Vision inbound with 3 outbound SNI targets on ports 443/8443/9443 load-balanced via `leastPing`. Calls `setup-monitoring.sh` internally.
 
 ## Key Scripts
 
@@ -28,11 +26,9 @@ Run scripts in this sequence — later scripts depend on output from earlier one
 |---|---|---|
 | `add-user.sh <name>` | RU Bridge | Add a user to Xray config, prints their VLESS link |
 | `revoke-user.sh <name>` | RU Bridge | Remove user and mark link as revoked in `/usr/local/etc/xray/user_links.txt` |
-| `install-uptime-kuma.sh --kuma-host` | RU VPS only | Full Kuma + all monitoring infrastructure |
-| `install-uptime-kuma.sh --remote-push` | EU VPS only | Lightweight: env file + tls-push-monitor only |
-| `configure-kuma.py` | RU VPS only | Auto-configures all 12 monitors (6 TCP + 3 TLS-Baseline + 3 TLS-DPI) |
-| `configure-kuma-peer.sh <eu_ip>` | RU VPS only | Adds EU TCP monitors to existing Kuma instance |
-| `tls-push-monitor.sh` | Both VPS (systemd) | TLS handshake telemetry → Kuma push (every 30 seconds) |
+| `setup-monitoring.sh` | RU VPS only | Installs Prometheus, Grafana, Pushgateway, Blackbox Exporter, Node Exporter, Alertmanager, Bark webhook bridge |
+| `setup-node-exporter.sh` | EU VPS only | Installs Node Exporter (called by setup-eu-exit.sh) |
+| `tls-push-monitor.sh` | Both VPS (systemd) | TLS handshake telemetry → Prometheus Pushgateway (every 30 seconds) |
 
 ## Architecture Details
 
@@ -58,39 +54,51 @@ Run scripts in this sequence — later scripts depend on output from earlier one
 
 **Config file location**: `/usr/local/etc/xray/config.json`
 **Saved user links**: `/usr/local/etc/xray/user_links.txt`
-**Kuma env file**: `/etc/xray-kuma.env` (mode 600 — contains push tokens, peer IPs)
+**Monitor env file**: `/etc/xray-monitor.env` (mode 600 — contains Pushgateway URL, TLS mode, peer IPs)
 
-## Monitoring Stack (Uptime Kuma)
+## Monitoring Stack (Prometheus + Grafana)
 
-**Single dashboard architecture**: Kuma runs on RU node only. Dashboard exposed publicly over HTTPS on `<KUMA_DOMAIN>:3001` via Let's Encrypt. EU pushes baseline TLS data remotely to RU over HTTPS.
+**Architecture**: All monitoring runs on the RU node. EU node pushes metrics to the RU Pushgateway. Grafana exposes the dashboard publicly over HTTPS.
 
-**Dashboard**: Uptime Kuma behind nginx HTTPS reverse proxy on port 3001 (Let's Encrypt SSL). Nginx proxies to Kuma on port 13001. Access at `https://<KUMA_DOMAIN>:3001`.
+```
+RU Node:
+  Prometheus :9090  ← scrapes → Blackbox Exporter :9115  (TCP probes)
+                    ← scrapes → Pushgateway :9091          (TLS push metrics)
+                    ← scrapes → Node Exporter :9100        (RU resources)
+                    ← scrapes → Node Exporter (EU) :9100   (EU resources)
+  Grafana :13000 (internal) → nginx HTTPS :3000 (public)
+  Alertmanager :9093 → bark-webhook.py :9095 → Bark API
 
-**Monitors created by `configure-kuma.py`** (all on RU Kuma):
+EU Node:
+  Node Exporter :9100          (scraped by RU Prometheus)
+  tls-push-monitor.service → POST → RU Pushgateway :9091
+```
 
-*Process liveness (native Kuma TCP monitors):*
+**Dashboard**: Grafana behind nginx HTTPS reverse proxy on port 3000 (Let's Encrypt SSL). Access at `https://<KUMA_DOMAIN>:3000`.
 
-| Monitor | Type | Target | Interval |
+**Metrics collected:**
+
+*TCP port probes (Blackbox Exporter — from RU node's perspective):*
+
+| Target | Purpose |
+|---|---|
+| 127.0.0.1:443 | Xray local port |
+| 127.0.0.1:48022 | SSH local |
+| EU_IP:443 | EU Xray port 1 |
+| EU_IP:8443 | EU Xray port 2 |
+| EU_IP:9443 | EU Xray port 3 |
+| EU_IP:48022 | EU SSH |
+
+*TLS telemetry (Pushgateway — DPI-aware):*
+
+| Metric | Labels | Pushed from | Purpose |
 |---|---|---|---|
-| Xray Local :443 | TCP | 127.0.0.1:443 | 60s |
-| SSH Local :48022 | TCP | 127.0.0.1:48022 | 60s |
-| EU Xray :443 | TCP | EU_IP:443 | 60s |
-| EU Xray :8443 | TCP | EU_IP:8443 | 60s |
-| EU Xray :9443 | TCP | EU_IP:9443 | 60s |
-| EU SSH :48022 | TCP | EU_IP:48022 | 60s |
+| `tls_probe_success` | sni, mode=baseline | EU tls-push-monitor | Mirror server TLS health |
+| `tls_probe_latency_ms` | sni, mode=baseline | EU tls-push-monitor | Mirror server latency |
+| `tls_probe_success` | sni, mode=dpi | RU tls-push-monitor | Cross-border DPI test |
+| `tls_probe_latency_ms` | sni, mode=dpi | RU tls-push-monitor | DPI probe latency |
 
-*TLS telemetry (push monitors — DPI-aware):*
-
-| Monitor | Type | Pushed from | Purpose |
-|---|---|---|---|
-| TLS-Baseline debian.snt.utwente.nl | PUSH | EU tls-push-monitor.sh | Mirror server TLS health |
-| TLS-Baseline nl.archive.ubuntu.com | PUSH | EU tls-push-monitor.sh | Mirror server TLS health |
-| TLS-Baseline eclipse.mirror.liteserver.nl | PUSH | EU tls-push-monitor.sh | Mirror server TLS health |
-| TLS-DPI debian.snt.utwente.nl | PUSH | RU tls-push-monitor.sh | Cross-border DPI test |
-| TLS-DPI nl.archive.ubuntu.com | PUSH | RU tls-push-monitor.sh | Cross-border DPI test |
-| TLS-DPI eclipse.mirror.liteserver.nl | PUSH | RU tls-push-monitor.sh | Cross-border DPI test |
-
-**Truth Matrix** — side-by-side comparison per SNI:
+**Truth Matrix** — DPI detection logic (PromQL alert: `tls_probe_success{mode="baseline"} == 1 and on(sni) tls_probe_success{mode="dpi"} == 0`):
 
 | EU Baseline | RU DPI Probe | Meaning | Action |
 |---|---|---|---|
@@ -100,19 +108,20 @@ Run scripts in this sequence — later scripts depend on output from earlier one
 | DOWN | UP | Impossible state | Check EU routing |
 
 **tls-push-monitor.sh** (`tls-push-monitor.service`):
-- Runs as a systemd service with a 30-second sleep loop
-- Mode auto-detected from env: `TLS_RESOLVE_TO` empty = baseline (EU), set = DPI probe (RU)
-- **Baseline mode (EU)**: `curl` to real mirror servers on port 443, captures `time_appconnect`
-- **DPI probe mode (RU)**: `curl --resolve` forces SNI to EU IP on specific port, captures `time_appconnect`
-- Pushes `?status=up&ping=<ms>` (converted from seconds to milliseconds) or `?status=down&msg=<reason>`
+- Runs as a systemd service (while-true loop, 30-second sleep)
+- Config from `/etc/xray-monitor.env`: `TLS_MODE`, `TLS_TARGETS`, `TLS_RESOLVE_TO`, `TLS_PUSHGATEWAY_URL`
+- **Baseline mode (EU)**: `curl` to real mirror servers, captures `time_appconnect`, pushes to Pushgateway
+- **DPI probe mode (RU)**: `curl --resolve` forces SNI to EU IP on specific port, pushes to Pushgateway
+- Push format: Prometheus text exposition to `<PUSHGATEWAY_URL>/metrics/job/tls_probes/instance/<hostname>/sni/<sni>/mode/<mode>`
 
-**log-capture-webhook.py** (`log-capture-webhook.service`, port 9000):
-- Receives Uptime Kuma webhook alerts
-- On DOWN: captures last 50 lines of xray error/access logs, saves incident file, sends Bark follow-up
-- On UP: saves recovery entry, sends Bark recovery push
-- Incident retention: 30 days (cron purge at 4 AM daily)
+**Alert rules** (`prometheus-alerts.yml`):
+- `DPIBlockDetected` — baseline UP + DPI DOWN for same SNI, for 2m → critical
+- `XrayPortDown` — TCP probe failure for 2m → critical
+- `VPSDiskLow` — disk below 10%, for 5m → warning
+- `NodeDown` — Node Exporter unreachable for 2m → critical
+- `TLSPushMissing` — no DPI push metrics in Pushgateway for 5m → warning
 
-**Notifications**: Bark push via Uptime Kuma native integration + webhook follow-ups with log context.
+**Notifications**: Alertmanager → `bark-webhook.py` (port 9095) → Bark API push.
 
 ## SSH Access After Setup
 
@@ -120,8 +129,8 @@ Run scripts in this sequence — later scripts depend on output from earlier one
 # Windows (from PowerShell)
 ssh -p 48022 -i "$env:USERPROFILE\.ssh\vps_key" root@<IP>
 
-# Kuma dashboard (open directly in browser)
-# https://<KUMA_DOMAIN>:3001
+# Grafana dashboard (open directly in browser)
+# https://<KUMA_DOMAIN>:3000
 ```
 
 ## Editing the Xray Config

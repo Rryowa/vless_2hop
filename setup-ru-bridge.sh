@@ -21,25 +21,27 @@ PORT_2=8443
 PORT_3=9443
 
 # ── Wipe previous install — clean slate ──────────────────────────────────────
-echo "[Wipe] Removing previous Xray/Kuma/monitoring install..."
-systemctl stop xray uptime-kuma log-capture-webhook tls-push-monitor nginx 2>/dev/null || true
-systemctl disable xray uptime-kuma log-capture-webhook tls-push-monitor nginx 2>/dev/null || true
-rm -f /etc/systemd/system/uptime-kuma.service
-rm -f /etc/systemd/system/log-capture-webhook.service
+echo "[Wipe] Removing previous Xray/monitoring install..."
+systemctl stop xray prometheus grafana-server pushgateway blackbox-exporter node-exporter alertmanager bark-webhook tls-push-monitor nginx 2>/dev/null || true
+systemctl disable xray prometheus grafana-server pushgateway blackbox-exporter node-exporter alertmanager bark-webhook tls-push-monitor nginx 2>/dev/null || true
+rm -f /etc/systemd/system/prometheus.service
+rm -f /etc/systemd/system/pushgateway.service
+rm -f /etc/systemd/system/blackbox-exporter.service
+rm -f /etc/systemd/system/alertmanager.service
 rm -f /etc/systemd/system/tls-push-monitor.service
+rm -f /etc/systemd/system/bark-webhook.service
 rm -f /etc/systemd/system/xray.service.d/override.conf
 rmdir /etc/systemd/system/xray.service.d 2>/dev/null || true
 rm -f /usr/local/etc/xray/config.json
 rm -f /usr/local/etc/xray/user_links.txt
 rm -f /etc/logrotate.d/xray
 rm -f /usr/local/bin/tls-push-monitor.sh
+rm -f /etc/nginx/sites-enabled/grafana-proxy
+rm -f /etc/nginx/sites-available/grafana-proxy
+rm -f /etc/xray-monitor.env
 rm -f /etc/xray-kuma.env
-rm -f /opt/log-capture-webhook.py
-rm -rf /opt/uptime-kuma
-rm -f /etc/nginx/sites-enabled/kuma-proxy
-rm -f /etc/nginx/sites-available/kuma-proxy
 rm -rf /var/log/xray
-(crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat\|xray/incidents" || true) | crontab -
+(crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat" || true) | crontab -
 systemctl daemon-reload
 echo "[Wipe] Done."
 # ─────────────────────────────────────────────────────────────────────────────
@@ -64,7 +66,7 @@ echo "=========================================================="
 echo "      MONITORING SETUP                                    "
 echo "=========================================================="
 read -p "Enter BARK_KEY (leave blank to skip notifications): " BARK_KEY
-read -p "Enter Kuma dashboard domain (e.g., rryo.mooo.com): " KUMA_DOMAIN
+read -p "Enter monitoring/Grafana domain (e.g., rryo.mooo.com): " KUMA_DOMAIN
 echo "=========================================================="
 
 echo "1. Installing Xray-core..."
@@ -323,12 +325,8 @@ echo -e "\e[32m$SHARE_LINK\e[0m"
 echo "✅ Link successfully saved to: $LINKS_FILE"
 echo "=========================================================="
 
-echo "5. Installing Uptime Kuma monitoring (full Kuma host)..."
+echo "5. Installing monitoring stack (Prometheus + Grafana + Alertmanager)..."
 BARK_KEY="$BARK_KEY" \
-PEER_IP="$EU_IP" \
-PEER_SNI="$SNI_1" \
-LOCAL_SNI="$LOCAL_SNI" \
-EU_SNIS="${SNI_1}:443,${SNI_2}:443,${SNI_3}:443" \
-RU_SNIS="${SNI_1}:${PORT_1},${SNI_2}:${PORT_2},${SNI_3}:${PORT_3}" \
+EU_IP="$EU_IP" \
 KUMA_DOMAIN="$KUMA_DOMAIN" \
-bash "$(dirname "$0")/install-uptime-kuma.sh" --kuma-host
+bash "$(dirname "$0")/setup-monitoring.sh"

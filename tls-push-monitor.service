@@ -1,15 +1,15 @@
 [Unit]
-Description=TLS Push Monitor (curl -> Uptime Kuma)
+Description=TLS Handshake Monitor (Prometheus Push)
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c 'while true; do /usr/local/bin/tls-push-monitor.sh; sleep 30; done'
+User=nobody
+Group=nogroup
+ExecStart=/usr/local/bin/tls-push-monitor.sh
 Restart=always
-RestartSec=10
-
-NoNewPrivileges=true
-PrivateTmp=true
+RestartSec=5
+EnvironmentFile=/etc/xray-monitor.env
 
 [Install]
 WantedBy=multi-user.target

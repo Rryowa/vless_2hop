@@ -27,13 +27,12 @@ echo "  :${PORT_3} → ${SNI_3}"
 echo "=========================================================="
 read -p "Enter BARK_KEY (leave blank to skip notifications): " BARK_KEY
 read -p "Enter RU Bridge VPS IP (leave blank to skip peer monitors): " RU_IP
-read -p "Enter Kuma dashboard domain (e.g., rryo.mooo.com): " KUMA_DOMAIN
 echo "=========================================================="
 
 # ── Wipe previous install — clean slate ──────────────────────────────────────
 echo "[Wipe] Removing previous Xray/monitoring install..."
-systemctl stop xray tls-push-monitor 2>/dev/null || true
-systemctl disable xray tls-push-monitor 2>/dev/null || true
+systemctl stop xray tls-push-monitor node-exporter 2>/dev/null || true
+systemctl disable xray tls-push-monitor node-exporter 2>/dev/null || true
 rm -f /etc/systemd/system/tls-push-monitor.service
 rm -f /etc/systemd/system/xray.service.d/override.conf
 rmdir /etc/systemd/system/xray.service.d 2>/dev/null || true
@@ -42,6 +41,9 @@ rm -f /usr/local/etc/xray/user_links.txt
 rm -f /etc/logrotate.d/xray
 rm -f /usr/local/bin/tls-push-monitor.sh
 rm -f /etc/xray-kuma.env
+rm -f /etc/xray-monitor.env
+rm -f /etc/systemd/system/node-exporter.service
+rm -f /usr/local/bin/node_exporter
 rm -rf /var/log/xray
 (crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat" || true) | crontab -
 systemctl daemon-reload
@@ -267,10 +269,31 @@ echo "✅ Link saved to: $LINKS_FILE"
 echo "=========================================================="
 echo "[PASS] Xray is running correctly!"
 
-echo "7. Installing TLS monitoring (lightweight — no Kuma on EU node)..."
-RU_IP="$RU_IP" \
-LOCAL_SNI="$SNI_1" \
-TLS_TARGETS="${SNI_1}:443,${SNI_2}:443,${SNI_3}:443" \
-KUMA_DOMAIN="$KUMA_DOMAIN" \
-bash "$(dirname "$0")/install-uptime-kuma.sh" --remote-push
+echo "7. Installing Node Exporter..."
+RU_IP="$RU_IP" bash "$(dirname "$0")/setup-node-exporter.sh"
+
+echo "8. Installing TLS push monitor (baseline mode)..."
+cat > /etc/xray-monitor.env << EOF
+TLS_TARGETS=${SNI_1}:443,${SNI_2}:443,${SNI_3}:443
+TLS_RESOLVE_TO=
+TLS_MODE=baseline
+TLS_PUSHGATEWAY_URL=http://${RU_IP}:9091
+EOF
+chmod 600 /etc/xray-monitor.env
+
+cp "$(dirname "$0")/tls-push-monitor.sh" /usr/local/bin/tls-push-monitor.sh
+chmod +x /usr/local/bin/tls-push-monitor.sh
+
+# tls-push-monitor.service must exist in the repo
+cp "$(dirname "$0")/tls-push-monitor.service" /etc/systemd/system/tls-push-monitor.service
+systemctl daemon-reload
+systemctl enable --now tls-push-monitor
+
+echo "=========================================================="
+echo "         EU MONITORING INSTALL COMPLETE                   "
+echo "=========================================================="
+echo "Node Exporter: :9100 (whitelisted to RU VPS only)"
+echo "TLS push monitor: running in baseline mode"
+echo "Pushing metrics to: http://${RU_IP}:9091"
+echo "=========================================================="
 
