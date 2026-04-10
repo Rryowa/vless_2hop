@@ -203,10 +203,20 @@ chown -R grafana:grafana /etc/grafana/provisioning /etc/grafana/dashboards
 systemctl daemon-reload
 systemctl enable --now grafana-server
 
-# Set admin password if provided
+# Set admin password via HTTP API (avoids grafana-cli re-triggering migrations)
 if [ -n "$GRAFANA_PASSWORD" ]; then
-    sleep 5  # wait for Grafana to finish starting
-    grafana-cli --homepath /usr/share/grafana admin reset-admin-password "$GRAFANA_PASSWORD" 2>/dev/null \
+    echo "       Waiting for Grafana HTTP API..."
+    for i in $(seq 1 30); do
+        if curl -sf "http://127.0.0.1:13000/api/health" -o /dev/null 2>/dev/null; then
+            break
+        fi
+        sleep 2
+    done
+    curl -sf -X PUT "http://admin:admin@127.0.0.1:13000/api/user/password" \
+        -H "Content-Type: application/json" \
+        -d "{\"oldPassword\":\"admin\",\"newPassword\":\"${GRAFANA_PASSWORD}\",\"confirmNew\":\"${GRAFANA_PASSWORD}\"}" \
+        -o /dev/null \
+        && echo "       Grafana admin password set." \
         || echo "       Warning: could not set Grafana password — change it manually in the UI."
 fi
 echo "[3/12] Grafana installed and started on 127.0.0.1:13000."

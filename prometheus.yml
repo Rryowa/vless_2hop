@@ -22,11 +22,15 @@ scrape_configs:
       - targets: ['127.0.0.1:443']
         labels:
           node: 'RU'
-          name: '<LOCAL_SNI>'
+          name: 'RU Xray'
       - targets: ['127.0.0.1:48022']
         labels:
           node: 'RU'
           name: 'RU SSH'
+      - targets: ['<LOCAL_SNI>:443']
+        labels:
+          node: 'RU'
+          name: '<LOCAL_SNI>'
       - targets: ['<EU_IP>:443']
         labels:
           node: 'EU'

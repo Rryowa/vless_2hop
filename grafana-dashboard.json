@@ -58,12 +58,12 @@
     {
       "id": 1,
       "title": "TCP Probes",
-      "type": "stat",
+      "type": "table",
       "gridPos": {
         "x": 0,
         "y": 0,
         "w": 12,
-        "h": 4
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -72,68 +72,175 @@
       "targets": [
         {
           "expr": "probe_success{job=\"tcp_probes\"}",
-          "legendFormat": "{{name}}",
+          "format": "table",
+          "instant": true,
           "refId": "A"
+        },
+        {
+          "expr": "probe_duration_seconds{job=\"tcp_probes\"} * 1000",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
         }
       ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "name",
+            "mode": "outer"
+          }
         },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "DOWN",
-                  "color": "red"
-                },
-                "1": {
-                  "text": "UP",
-                  "color": "green"
-                }
-              }
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "job": true,
+              "job 1": true,
+              "job 2": true,
+              "__name__": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "instance": true,
+              "instance 1": true,
+              "instance 2": true,
+              "node 1": true
+            },
+            "renameByName": {
+              "name": "Name",
+              "node": "Node",
+              "Value #A": "Status",
+              "Value #B": "Latency (ms)"
+            },
+            "indexByName": {
+              "Name": 0,
+              "Node": 1,
+              "Status": 2,
+              "Latency (ms)": 3
             }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
               {
-                "color": "red",
-                "value": null
+                "id": "custom.displayMode",
+                "value": "color-background"
               },
               {
-                "color": "green",
-                "value": 1
+                "id": "color",
+                "value": { "mode": "thresholds" }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "green", "value": 1 }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": { "text": "DOWN" },
+                      "1": { "text": "UP" }
+                    }
+                  }
+                ]
               }
             ]
           },
-          "color": {
-            "mode": "thresholds"
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Latency (ms)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": { "mode": "thresholds" }
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "#EAB839", "value": 100 },
+                    { "color": "red", "value": 500 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 280
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Node"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
           }
-        },
-        "overrides": []
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          { "displayName": "Name", "desc": false }
+        ],
+        "footer": {
+          "show": false
+        }
       }
     },
     {
       "id": 2,
       "title": "TLS Probe: Baseline",
-      "type": "stat",
+      "type": "table",
       "gridPos": {
         "x": 12,
         "y": 0,
-        "w": 6,
-        "h": 4
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -142,68 +249,163 @@
       "targets": [
         {
           "expr": "tls_probe_success{mode=\"baseline\", sni=~\"$sni\"}",
-          "legendFormat": "{{sni}}",
+          "format": "table",
+          "instant": true,
           "refId": "A"
+        },
+        {
+          "expr": "tls_probe_latency_ms{mode=\"baseline\", sni=~\"$sni\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
         }
       ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "sni",
+            "mode": "outer"
+          }
         },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "DOWN",
-                  "color": "red"
-                },
-                "1": {
-                  "text": "UP",
-                  "color": "green"
-                }
-              }
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "job": true,
+              "job 1": true,
+              "job 2": true,
+              "__name__": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "instance": true,
+              "instance 1": true,
+              "instance 2": true,
+              "mode": true,
+              "mode 1": true,
+              "mode 2": true
+            },
+            "renameByName": {
+              "sni": "SNI",
+              "Value #A": "Status",
+              "Value #B": "Latency (ms)"
+            },
+            "indexByName": {
+              "SNI": 0,
+              "Status": 1,
+              "Latency (ms)": 2
             }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
               {
-                "color": "red",
-                "value": null
+                "id": "custom.displayMode",
+                "value": "color-background"
               },
               {
-                "color": "green",
-                "value": 1
+                "id": "color",
+                "value": { "mode": "thresholds" }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "green", "value": 1 }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": { "text": "DOWN" },
+                      "1": { "text": "UP" }
+                    }
+                  }
+                ]
               }
             ]
           },
-          "color": {
-            "mode": "thresholds"
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Latency (ms)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": { "mode": "thresholds" }
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "#EAB839", "value": 100 },
+                    { "color": "red", "value": 500 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SNI"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 300
+              }
+            ]
           }
-        },
-        "overrides": []
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          { "displayName": "SNI", "desc": false }
+        ],
+        "footer": {
+          "show": false
+        }
       }
     },
     {
       "id": 3,
       "title": "TLS Probe: DPI",
-      "type": "stat",
+      "type": "table",
       "gridPos": {
-        "x": 18,
-        "y": 0,
-        "w": 6,
-        "h": 4
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -212,57 +414,152 @@
       "targets": [
         {
           "expr": "tls_probe_success{mode=\"dpi\", sni=~\"$sni\"}",
-          "legendFormat": "{{sni}}",
+          "format": "table",
+          "instant": true,
           "refId": "A"
+        },
+        {
+          "expr": "tls_probe_latency_ms{mode=\"dpi\", sni=~\"$sni\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
         }
       ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "sni",
+            "mode": "outer"
+          }
         },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "DOWN",
-                  "color": "red"
-                },
-                "1": {
-                  "text": "UP",
-                  "color": "green"
-                }
-              }
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "job": true,
+              "job 1": true,
+              "job 2": true,
+              "__name__": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "instance": true,
+              "instance 1": true,
+              "instance 2": true,
+              "mode": true,
+              "mode 1": true,
+              "mode 2": true
+            },
+            "renameByName": {
+              "sni": "SNI",
+              "Value #A": "Status",
+              "Value #B": "Latency (ms)"
+            },
+            "indexByName": {
+              "SNI": 0,
+              "Status": 1,
+              "Latency (ms)": 2
             }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
               {
-                "color": "red",
-                "value": null
+                "id": "custom.displayMode",
+                "value": "color-background"
               },
               {
-                "color": "green",
-                "value": 1
+                "id": "color",
+                "value": { "mode": "thresholds" }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "green", "value": 1 }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": { "text": "DOWN" },
+                      "1": { "text": "UP" }
+                    }
+                  }
+                ]
               }
             ]
           },
-          "color": {
-            "mode": "thresholds"
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Latency (ms)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": { "mode": "thresholds" }
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "#EAB839", "value": 100 },
+                    { "color": "red", "value": 500 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SNI"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 300
+              }
+            ]
           }
-        },
-        "overrides": []
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          { "displayName": "SNI", "desc": false }
+        ],
+        "footer": {
+          "show": false
+        }
       }
     },
     {
@@ -271,7 +568,7 @@
       "type": "timeseries",
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 8,
         "w": 12,
         "h": 8
       },
@@ -316,7 +613,7 @@
       "type": "timeseries",
       "gridPos": {
         "x": 12,
-        "y": 4,
+        "y": 8,
         "w": 12,
         "h": 8
       },
@@ -363,7 +660,7 @@
       "type": "table",
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 16,
         "w": 24,
         "h": 8
       },
