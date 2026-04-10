@@ -203,6 +203,12 @@ apt install -y nginx certbot python3-certbot-nginx
 # Stop nginx temporarily so certbot standalone can bind port 80
 systemctl stop nginx 2>/dev/null || true
 
+# UFW: open port 80 before certbot so ACME challenge can reach the server
+if command -v ufw &>/dev/null; then
+    ufw allow 80/tcp
+    echo "[Nginx] UFW rule added: port 80 (ACME)"
+fi
+
 echo "[Certbot] Obtaining Let's Encrypt certificate for ${KUMA_DOMAIN}..."
 certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$KUMA_DOMAIN"
 
@@ -244,11 +250,10 @@ nginx -t
 systemctl enable nginx
 systemctl reload-or-restart nginx
 
-# UFW: allow public access to dashboard + ACME
+# UFW: allow public access to dashboard
 if command -v ufw &>/dev/null; then
     ufw allow 3001/tcp
-    ufw allow 80/tcp
-    echo "[Nginx] UFW rules added: ports 3001 (HTTPS dashboard) + 80 (ACME)"
+    echo "[Nginx] UFW rule added: port 3001 (HTTPS dashboard)"
 fi
 
 # Certbot auto-renew

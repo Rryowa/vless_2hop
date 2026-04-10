@@ -65,7 +65,8 @@ icacls "$env:USERPROFILE\.ssh\vps_key" /grant:r "$($env:USERNAME):F"
 
 ### On the VPS (SSH in as root with password):
 ```powershell
-ssh root@<IP>
+ssh -i "$env:USERPROFILE\.ssh\vps_key" root@46.16.14.117
+ssh -i "$env:USERPROFILE\.ssh\vps_key" root@144.31.123.251
 ```
 
 ```sh
@@ -75,7 +76,7 @@ git clone https://github.com/Rryowa/vless_2hop.git && cd vless_2hop
 bash setup-vps.sh
 # When prompted, paste your public key (contents of vps_key.pub)
 ```
-
+ 
 ### Reconnect on port 48022:
 ```powershell
 ssh -p 48022 -i "$env:USERPROFILE\.ssh\vps_key" root@<IP>
@@ -130,7 +131,7 @@ ssh -p 48022 -i "$env:USERPROFILE\.ssh\vps_key" root@<RU_IP>
 
 ```sh
 cd vless_2hop
-sudo bash setup-ru-bridge.sh
+bash setup-ru-bridge.sh
 ```
 
 **Prompts:** EU IP, EU UUID, EU Public Key, EU Short ID, BARK_KEY, Kuma dashboard domain.
