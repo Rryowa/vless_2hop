@@ -154,8 +154,10 @@ echo "[2/12] Prometheus installed and started."
 # ── Step 3: Install Grafana OSS ──────────────────────────────────────────────
 echo "[3/12] Installing Grafana OSS..."
 apt install -y apt-transport-https
-wget -q -O /usr/share/keyrings/grafana.key https://apt.grafana.com/gpg.key
-echo "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main" \
+mkdir -p /etc/apt/keyrings
+wget -qO /etc/apt/keyrings/grafana.asc https://packages.grafana.com/gpg-full.key
+chmod 644 /etc/apt/keyrings/grafana.asc
+echo "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://mirror.yandex.ru/mirrors/packages.grafana.com/oss stable main" \
     > /etc/apt/sources.list.d/grafana.list
 apt update && apt install -y grafana
 
