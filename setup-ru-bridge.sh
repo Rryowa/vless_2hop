@@ -38,6 +38,7 @@ rm -rf /var/log/xray
 
 if command -v ufw &>/dev/null; then
     ufw delete allow 443/tcp 2>/dev/null || true
+    ufw allow 443/tcp
 fi
 
 (crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat" || true) | crontab -

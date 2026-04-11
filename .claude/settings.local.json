@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i ~/.ssh/vps_key -p 22 root@217.60.186.193 \"echo OK; hostname; uptime\")",
+      "Bash(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)",
+      "Bash(ssh -o StrictHostKeyChecking=no -i '~/.ssh/vps_key' -p 22 root@217.60.186.193 'bash -c '\\\\''__CMDSUB_OUTPUT__'\\\\'' @ install 2>&1 | tail -5')",
+      "Bash(ssh:*)"
+    ]
+  }
+}
