@@ -25,6 +25,26 @@ Client → RU Bridge VPS (:443, VLESS+Reality+Vision+TCP)
 3. SSH key pair generated on your local machine.
 
 ---
+To add or change the domains you are testing, you just need to update the configuration file on your RU VPS:
+
+1. Connect to your RU VPS:
+
+ssh -p 48022 -i "$env:USERPROFILE\.ssh\vps_key" root@217.60.186.193
+
+2. Open the environment file using a text editor like nano:
+
+nano /etc/xray-monitor.env
+
+3. Look for the line that says CANDIDATE_TARGETS=debian.com:443. Change it to whatever domains you want to test, separated by commas. For example:
+
+CANDIDATE_TARGETS=ubuntu.com:443,kernel.org:443,apple.com:443
+
+4. Save the file (in nano, press Ctrl+O, Enter, then Ctrl+X).
+
+5. Restart the monitor service to apply the changes immediately:
+
+systemctl restart tls-push-monitor
+
 
 ## Deployment Instructions
 

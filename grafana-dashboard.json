@@ -1053,46 +1053,6 @@
           "show": false
         }
       }
-    },
-    {
-      "id": 99,
-      "title": "Candidate SNI Latency Trend (Direct)",
-      "type": "timeseries",
-      "gridPos": {
-        "x": 0,
-        "y": 24,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "tls_probe_latency_ms{mode=\"candidate\", sni=~\"$sni\"}",
-          "legendFormat": "{{sni}} candidate",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi"
-        },
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      }
     }
   ]
 }
