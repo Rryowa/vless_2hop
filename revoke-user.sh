@@ -23,8 +23,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Check if the user actually exists in the config
-USER_EXISTS=$(jq --arg email "$USERNAME" '[.inbounds[0].settings.clients[] | select(.email == $email)] | length' "$CONFIG_FILE")
+# Check if the user actually exists in the config (checking the first inbound is sufficient)
+USER_EXISTS=$(jq --arg email "$USERNAME" '[.inbounds[] | select(.tag == "vless-vision-in").settings.clients[] | select(.email == $email)] | length' "$CONFIG_FILE")
 
 if [ "$USER_EXISTS" -eq 0 ]; then
     echo "[FAIL] User '$USERNAME' not found in the Xray configuration."
@@ -33,7 +33,10 @@ fi
 
 echo "1. Removing $USERNAME from config.json..."
 cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
-if ! jq --arg email "$USERNAME" '.inbounds[0].settings.clients |= map(select(.email != $email))' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"; then
+if ! jq --arg email "$USERNAME" '
+  (.inbounds[] | select(.tag == "vless-vision-in").settings.clients) |= map(select(.email != $email)) |
+  (.inbounds[] | select(.tag == "vless-xhttp-in").settings.clients) |= map(select(.email != $email))
+' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"; then
     echo "[FAIL] Failed to modify config.json!"
     rm -f "${CONFIG_FILE}.tmp"
     exit 1

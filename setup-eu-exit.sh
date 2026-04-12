@@ -10,36 +10,80 @@ fi
 
 export PATH=$PATH:/usr/local/bin
 
-source "$(dirname "${BASH_SOURCE[0]}")/sni-config.sh"
+# --- Load Environment Variables ---
+ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.env"
+if [ -f "$ENV_FILE" ]; then
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+fi
 
+# Helper to save to .env
+update_env() {
+    local key=$1
+    local val=$2
+    [ ! -f "$ENV_FILE" ] && touch "$ENV_FILE"
+    if grep -q "^${key}=" "$ENV_FILE"; then
+        sed -i "s|^${key}=.*|${key}=\"${val}\"|" "$ENV_FILE"
+    else
+        echo "${key}=\"${val}\"" >> "$ENV_FILE"
+    fi
+}
+
+# ── Inputs ────────────────────────────────────────────────────────────────────
 echo "=========================================================="
-echo "                 EU EXIT NODE SETUP                       "
+echo "      EU EXIT CONFIGURATION (LOADED FROM .env)            "
 echo "=========================================================="
-echo "SNI targets:"
+
+# SNIs
+read -p "SNI 1 (Port 443) [current: $SNI_1]: " INPUT; SNI_1=${INPUT:-$SNI_1}; update_env SNI_1 "$SNI_1"
+read -p "SNI 2 (Port 8443) [current: $SNI_2]: " INPUT; SNI_2=${INPUT:-$SNI_2}; update_env SNI_2 "$SNI_2"
+read -p "SNI 3 (Port 9443) [current: $SNI_3]: " INPUT; SNI_3=${INPUT:-$SNI_3}; update_env SNI_3 "$SNI_3"
+read -p "RU Local SNI (e.g., vkvideo.ru) [current: $LOCAL_SNI]: " INPUT; LOCAL_SNI=${INPUT:-$LOCAL_SNI}; update_env LOCAL_SNI "$LOCAL_SNI"
+
+# Ports (ensure they are in ENV)
+[ -z "$PORT_1" ] && PORT_1=443 && update_env PORT_1 443
+[ -z "$PORT_2" ] && PORT_2=8443 && update_env PORT_2 8443
+[ -z "$PORT_3" ] && PORT_3=9443 && update_env PORT_3 9443
+
+echo "----------------------------------------------------------"
+echo "Monitoring & Peer Details:"
+read -p "BARK_KEY (blank to skip) [current: $BARK_KEY]: " INPUT; BARK_KEY=${INPUT:-$BARK_KEY}; update_env BARK_KEY "$BARK_KEY"
+read -p "RU Bridge VPS IP [current: $RU_IP]: " INPUT; RU_IP=${INPUT:-$RU_IP}; update_env RU_IP "$RU_IP"
+echo "=========================================================="
+
+echo "SNI targets configured:"
 echo "  :${PORT_1} → ${SNI_1}"
 echo "  :${PORT_2} → ${SNI_2}"
 echo "  :${PORT_3} → ${SNI_3}"
-echo "=========================================================="
-read -p "Enter BARK_KEY (leave blank to skip notifications): " BARK_KEY
-read -p "Enter RU Bridge VPS IP (leave blank to skip peer monitors): " RU_IP
+echo "  Local → ${LOCAL_SNI}"
 echo "=========================================================="
 
 # ── Wipe previous install — clean slate ──────────────────────────────────────
 echo "[Wipe] Removing previous Xray/monitoring install..."
-systemctl stop xray tls-push-monitor node-exporter 2>/dev/null || true
-systemctl disable xray tls-push-monitor node-exporter 2>/dev/null || true
+for svc in xray tls-push-monitor node-exporter; do
+    systemctl stop "$svc" 2>/dev/null || true
+    systemctl disable "$svc" 2>/dev/null || true
+done
 rm -f /etc/systemd/system/tls-push-monitor.service
+rm -f /etc/systemd/system/node-exporter.service
 rm -f /etc/systemd/system/xray.service.d/override.conf
 rmdir /etc/systemd/system/xray.service.d 2>/dev/null || true
-rm -f /usr/local/etc/xray/config.json
-rm -f /usr/local/etc/xray/user_links.txt
-rm -f /etc/logrotate.d/xray
-rm -f /usr/local/bin/tls-push-monitor.sh
-rm -f /etc/xray-kuma.env
-rm -f /etc/xray-monitor.env
-rm -f /etc/systemd/system/node-exporter.service
+
+# Binaries
+rm -f /usr/local/bin/xray
 rm -f /usr/local/bin/node_exporter
-rm -rf /var/log/xray
+rm -f /usr/local/bin/tls-push-monitor.sh
+
+# Configs and Data
+rm -rf /usr/local/etc/xray/
+rm -rf /usr/local/share/xray/
+rm -rf /var/log/xray/
+rm -f /etc/logrotate.d/xray
+rm -f /etc/xray-monitor.env
+
+if command -v ufw &>/dev/null; then
+    ufw delete allow ${PORT_2}/tcp 2>/dev/null || true
+    ufw delete allow ${PORT_3}/tcp 2>/dev/null || true
+fi
 (crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat" || true) | crontab -
 systemctl daemon-reload
 echo "[Wipe] Done."

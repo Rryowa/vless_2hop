@@ -57,7 +57,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "TCP Probes",
+      "title": "TCP Probes (Live Status)",
       "type": "table",
       "gridPos": {
         "x": 0,
@@ -234,13 +234,13 @@
     },
     {
       "id": 2,
-      "title": "TLS Probe: Baseline",
+      "title": "TLS Baseline (Neutral)",
       "type": "table",
       "gridPos": {
         "x": 12,
         "y": 0,
         "w": 12,
-        "h": 6
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -399,13 +399,13 @@
     },
     {
       "id": 3,
-      "title": "TLS Probe: DPI",
+      "title": "TLS DPI (Probing EU)",
       "type": "table",
       "gridPos": {
         "x": 12,
-        "y": 6,
+        "y": 4,
         "w": 12,
-        "h": 6
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -563,8 +563,8 @@
       }
     },
     {
-      "id": 4,
-      "title": "TLS Latency (ms)",
+      "id": 100,
+      "title": "Link Health & DPI Shaping",
       "type": "timeseries",
       "gridPos": {
         "x": 0,
@@ -578,14 +578,168 @@
       },
       "targets": [
         {
-          "expr": "tls_probe_latency_ms{mode=\"baseline\", sni=~\"$sni\"}",
-          "legendFormat": "{{sni}} baseline",
+          "expr": "1 - avg_over_time(probe_success{job=\"icmp_probes\"}[$__rate_interval])",
+          "legendFormat": "General Link Loss (ICMP) {{instance}}",
           "refId": "A"
         },
         {
-          "expr": "tls_probe_latency_ms{mode=\"dpi\", sni=~\"$sni\"}",
-          "legendFormat": "{{sni}} dpi",
+          "expr": "rate(node_netstat_Tcp_RetransSegs{node=~\"$node\"}[5m]) / rate(node_netstat_Tcp_OutSegs{node=~\"$node\"}[5m] > 0)",
+          "legendFormat": "TCP Retrans Rate (DPI Interference) {{node}}",
           "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "axisCenteredZero": false,
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.05 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Node Resources & Local Health",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "100 - (avg by(node)(rate(node_cpu_seconds_total{mode=\"idle\", node=~\"$node\"}[5m])) * 100)",
+          "legendFormat": "{{node}} CPU%",
+          "refId": "A"
+        },
+        {
+          "expr": "(1 - node_memory_MemAvailable_bytes{node=~\"$node\"} / node_memory_MemTotal_bytes{node=~\"$node\"}) * 100",
+          "legendFormat": "{{node}} RAM%",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(node_network_receive_drop_total{node=~\"$node\"}[5m])",
+          "legendFormat": "{{node}} Local RX Drops (Buffer/Driver)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": ".*Local RX Drops.*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "pps"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": null
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Baseline Latency Trend (Neutral)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "tls_probe_latency_ms{mode=\"baseline\", sni=~\"$sni\"}",
+          "legendFormat": "{{sni}} baseline",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
@@ -608,12 +762,12 @@
       }
     },
     {
-      "id": 5,
-      "title": "Node Resources",
+      "id": 10,
+      "title": "DPI Latency Trend (RU)",
       "type": "timeseries",
       "gridPos": {
         "x": 12,
-        "y": 8,
+        "y": 16,
         "w": 12,
         "h": 8
       },
@@ -623,21 +777,14 @@
       },
       "targets": [
         {
-          "expr": "100 - (avg by(node)(rate(node_cpu_seconds_total{mode=\"idle\", node=~\"$node\"}[5m])) * 100)",
-          "legendFormat": "{{node}} CPU%",
+          "expr": "tls_probe_latency_ms{mode=\"dpi\", sni=~\"$sni\"}",
+          "legendFormat": "{{sni}} dpi",
           "refId": "A"
-        },
-        {
-          "expr": "(1 - node_memory_MemAvailable_bytes{node=~\"$node\"} / node_memory_MemTotal_bytes{node=~\"$node\"}) * 100",
-          "legendFormat": "{{node}} RAM%",
-          "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
+          "unit": "ms",
           "color": {
             "mode": "palette-classic"
           }
@@ -660,7 +807,7 @@
       "type": "table",
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 24,
         "w": 24,
         "h": 8
       },

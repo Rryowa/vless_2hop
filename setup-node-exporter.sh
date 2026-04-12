@@ -9,7 +9,29 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-[ -z "$RU_IP" ] && read -p "Enter RU Bridge VPS IP (for UFW allowlist on port 9100): " RU_IP
+# --- Load Environment Variables ---
+ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.env"
+if [ -f "$ENV_FILE" ]; then
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+fi
+
+# Helper to save to .env
+update_env() {
+    local key=$1
+    local val=$2
+    [ ! -f "$ENV_FILE" ] && touch "$ENV_FILE"
+    if grep -q "^${key}=" "$ENV_FILE"; then
+        sed -i "s|^${key}=.*|${key}=\"${val}\"|" "$ENV_FILE"
+    else
+        echo "${key}=\"${val}\"" >> "$ENV_FILE"
+    fi
+}
+
+if [ -z "$RU_IP" ]; then
+    read -p "Enter RU Bridge VPS IP (for UFW allowlist) [current: $RU_IP]: " INPUT
+    RU_IP=${INPUT:-$RU_IP}
+    [ -n "$RU_IP" ] && update_env RU_IP "$RU_IP"
+fi
 
 # ── Wipe previous install — clean slate ──────────────────────────────────────
 echo "[wipe] Removing any previous node_exporter install..."

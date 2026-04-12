@@ -42,12 +42,14 @@ Run scripts in this sequence — later scripts depend on output from earlier one
 - Routing: blocks `geoip:ru` and `geosite:category-ru` via blackhole (prevents traffic loops)
 
 **RU Bridge Node** (`setup-ru-bridge.sh`):
-- VLESS+Reality+Vision inbound on port 443, SNI target: `vkvideo.ru`
+- VLESS+Reality+Vision inbound on port 443, SNI target: `yandex.ru`
 - 3 parallel XHTTP outbounds to EU on ports 443/8443/9443, balanced by `burstObservatory` leastPing
 - DNS set to Yandex (`77.88.8.8`, `77.88.8.1`) to resolve Russian domains correctly
 - Same RU geoip/geosite blackhole rules as EU node
 
 **Shared infrastructure** (both nodes):
+- **Performance Tuning**: TCP BBR enabled for congestion control, TCP Fast Open (TFO) enabled. Sane, small-scale network stack defaults used for maximum reliability and protection against resource exhaustion.
+- **Resource Limits**: `nofile` (max open files) increased to a safe 65,535 for root and all users, providing plenty of headroom for private proxy use while maintaining a ceiling to prevent memory-related crashes.
 - Runet routing databases (`geosite.dat`, `geoip.dat`) from `runetfreedom/russia-v2ray-rules-dat`, auto-updated weekly via cron (Sundays 3 AM)
 - Xray systemd service configured with `Restart=always`, `RestartSec=5`
 - Log rotation: daily, 3 rotations, max 50 MB, journal capped at 50 MB
@@ -74,7 +76,7 @@ EU Node:
   tls-push-monitor.service → POST → RU Pushgateway :9091
 ```
 
-**Dashboard**: Grafana behind nginx HTTPS reverse proxy on port 3000 (Let's Encrypt SSL). Access at `https://<KUMA_DOMAIN>:3000`. SSL certificate auto-renewed via `certbot.timer` with UFW pre/post hooks.
+**Dashboard**: Grafana behind nginx HTTPS reverse proxy on port 3000 (Let's Encrypt SSL). Access at `https://<MONITORING_DOMAIN>:3000`. SSL certificate auto-renewed via `certbot.timer` with UFW pre/post hooks.
 
 **Metrics collected:**
 
@@ -88,7 +90,7 @@ EU Node:
 | EU_IP:8443 | EU Xray port 2 |
 | EU_IP:9443 | EU Xray port 3 |
 | EU_IP:48022 | EU SSH |
-| https://<KUMA_DOMAIN>:3000 | Grafana SSL certificate |
+| https://<MONITORING_DOMAIN>:3000 | Grafana SSL certificate |
 
 *TLS telemetry (Pushgateway — DPI-aware):*
 
@@ -122,7 +124,7 @@ EU Node:
 - `VPSDiskLow` — disk below 10%, for 5m → warning
 - `NodeDown` — Node Exporter unreachable for 2m → critical
 - `TLSPushStale` — no DPI push metrics updated in Pushgateway for 2m → warning
-- `CertExpirySoon` — SSL certificate for `<KUMA_DOMAIN>` expires in < 15 days → warning
+- `CertExpirySoon` — SSL certificate for `<MONITORING_DOMAIN>` expires in < 15 days → warning
 
 **Notifications**: Alertmanager → `bark-webhook.py` (port 9095) → Bark API push. Inhibit rules suppress `XrayPortDown` if `NodeDown` is firing for the same instance.
 
@@ -133,7 +135,7 @@ EU Node:
 ssh -p 48022 -i "$env:USERPROFILE\.ssh\vps_key" root@<IP>
 
 # Grafana dashboard (open directly in browser)
-# https://<KUMA_DOMAIN>:3000
+# https://<MONITORING_DOMAIN>:3000
 ```
 
 ## Editing the Xray Config

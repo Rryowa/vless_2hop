@@ -10,6 +10,33 @@ groups:
           summary: "DPI block on {{ $labels.sni }}"
           description: "EU baseline UP but RU DPI probe DOWN for {{ $labels.sni }} — active DPI block detected"
 
+      - alert: DPIThrottling
+        expr: (tls_probe_latency_ms{mode="dpi"} > 0) / on(sni) (tls_probe_latency_ms{mode="baseline"} > 0) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DPI throttling suspected on {{ $labels.sni }}"
+          description: "DPI probe latency is {{ $value | printf \"%.1f\" }}x baseline for {{ $labels.sni }} — possible shaping detected"
+
+      - alert: HighPacketLoss
+        expr: 1 - avg_over_time(probe_success{job="icmp_probes"}[5m]) > 0.10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High packet loss: {{ $labels.instance }}"
+          description: "ICMP packet loss to {{ $labels.instance }} is above 10% (current: {{ $value | humanizePercentage }})"
+
+      - alert: HighTCPRetransmissions
+        expr: rate(node_netstat_Tcp_RetransSegs[5m]) / rate(node_netstat_Tcp_OutSegs[5m] > 0) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High TCP retransmissions on {{ $labels.instance }}"
+          description: "TCP retransmission rate is {{ $value | humanizePercentage }} on {{ $labels.instance }} — likely path interference or congestion"
+
       - alert: XrayPortDown
         expr: probe_success{job="tcp_probes"} == 0
         for: 2m

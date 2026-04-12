@@ -59,12 +59,35 @@ echo "[4/5] Installing Fail2ban..."
 apt install -y fail2ban
 systemctl enable fail2ban
 
-echo "[5/5] Limiting systemd journal logs to prevent disk full..."
+echo "[5/5] Performance Tuning: BBR, TCP Fast Open, and Safe Limits..."
+# Enable BBR and TCP Fast Open
+cat > /etc/sysctl.d/99-vproxy-tune.conf << EOF
+# 1. BBR Congestion Control (Helps with bufferbloat and packet loss)
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+
+# 2. TCP Fast Open (Saves ~1 round-trip time on repeat connections)
+# 3 enables both client and server
+net.ipv4.tcp_fastopen = 3
+EOF
+
+sysctl -p /etc/sysctl.d/99-vproxy-tune.conf
+
+# Update limits.conf for the current session and future logins
+# Safe limit for a small private proxy (65535 is more than enough for 2-3 users)
+cat >> /etc/security/limits.conf << EOF
+* soft nofile 65535
+* hard nofile 65535
+root soft nofile 65535
+root hard nofile 65535
+EOF
+
+echo "[6/6] Limiting systemd journal logs to prevent disk full..."
 journalctl --vacuum-time=3d
 sed -i 's/^#\?SystemMaxUse=.*/SystemMaxUse=50M/' /etc/systemd/journald.conf
 systemctl restart systemd-journald
 
-echo "[FINAL] Activating Hardening (SSH Restart)..."
+echo "[FINAL] Activating Hardening & Tuning (SSH Restart)..."
 systemctl restart ssh
 
 echo "----------------------------------------------------------"

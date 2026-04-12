@@ -28,7 +28,10 @@ NEW_UUID=$(xray uuid)
 
 echo "2. Adding user to config.json..."
 cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
-if ! jq --arg uuid "$NEW_UUID" --arg email "$USERNAME" '.inbounds[0].settings.clients += [{"id": $uuid, "flow": "xtls-rprx-vision", "email": $email}]' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"; then
+if ! jq --arg uuid "$NEW_UUID" --arg email "$USERNAME" '
+  (.inbounds[] | select(.tag == "vless-vision-in").settings.clients) += [{"id": $uuid, "flow": "xtls-rprx-vision", "email": $email}] |
+  (.inbounds[] | select(.tag == "vless-xhttp-in").settings.clients) += [{"id": $uuid, "email": $email}]
+' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"; then
     echo "[FAIL] Failed to modify config.json!"
     rm -f "${CONFIG_FILE}.tmp"
     exit 1
@@ -45,10 +48,11 @@ fi
 echo "4. Restarting Xray to apply changes..."
 systemctl restart xray
 
-echo "5. Reconstructing VLESS Link..."
+echo "5. Reconstructing VLESS Links..."
 # Extract values from the current config
 IP=$(curl -4 -s https://ifconfig.me)
-PORT=$(jq -r '.inbounds[0].port' "$CONFIG_FILE")
+TCP_PORT=$(jq -r '.inbounds[] | select(.tag == "vless-vision-in").port' "$CONFIG_FILE")
+XHTTP_PORT=$(jq -r '.inbounds[] | select(.tag == "vless-xhttp-in").port' "$CONFIG_FILE")
 SNI=$(jq -r '.inbounds[0].streamSettings.realitySettings.serverNames[0]' "$CONFIG_FILE")
 PRIV_KEY=$(jq -r '.inbounds[0].streamSettings.realitySettings.privateKey' "$CONFIG_FILE")
 SHORT_ID=$(jq -r '.inbounds[0].streamSettings.realitySettings.shortIds[0]' "$CONFIG_FILE")
@@ -64,18 +68,27 @@ fi
 # Convert Public Key to URL safe base64
 PUB_URLSAFE=$(echo "$PUB_KEY" | tr '+/' '-_' | tr -d '=')
 
-SHARE_LINK="vless://$NEW_UUID@$IP:$PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=chrome&pbk=$PUB_URLSAFE&sid=$SHORT_ID&type=tcp&headerType=none#RU-Bridge-$USERNAME"
+LINK_TCP="vless://$NEW_UUID@$IP:$TCP_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=chrome&pbk=$PUB_URLSAFE&sid=$SHORT_ID&type=tcp&headerType=none#RU-Bridge-${USERNAME}-TCP"
+LINK_XHTTP="vless://$NEW_UUID@$IP:$XHTTP_PORT?encryption=none&security=reality&sni=$SNI&fp=chrome&pbk=$PUB_URLSAFE&sid=$SHORT_ID&type=xhttp&mode=packet-up&path=%2Funicorn-magic#RU-Bridge-${USERNAME}-xHTTP"
 
 echo ""
 echo "=========================================================="
 echo "               ✅ USER ADDED: $USERNAME                   "
 echo "=========================================================="
-echo "Send this exact link to $USERNAME to import into their app:"
-echo -e "\e[32m$SHARE_LINK\e[0m"
+echo "Send these exact links to $USERNAME to import into their app:"
+echo ""
+echo "1. VLESS Reality TCP (Vision):"
+echo -e "\e[32m$LINK_TCP\e[0m"
+echo ""
+echo "2. VLESS Reality xHTTP (Packet-up):"
+echo -e "\e[32m$LINK_XHTTP\e[0m"
 echo "=========================================================="
 
-# Save the link to a permanent file for future reference
+# Save the links to a permanent file for future reference
 mkdir -p /usr/local/etc/xray
 LINKS_FILE="/usr/local/etc/xray/user_links.txt"
-echo "$(date -Iseconds) - $USERNAME: $SHARE_LINK" >> "$LINKS_FILE"
-echo "✅ Link successfully saved to: $LINKS_FILE"
+{
+  echo "$(date -Iseconds) - $USERNAME (TCP): $LINK_TCP"
+  echo "$(date -Iseconds) - $USERNAME (xHTTP): $LINK_XHTTP"
+} >> "$LINKS_FILE"
+echo "✅ Links successfully saved to: $LINKS_FILE"

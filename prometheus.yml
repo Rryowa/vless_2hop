@@ -78,7 +78,24 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - https://<KUMA_DOMAIN>:3000
+          - https://<MONITORING_DOMAIN>:3000
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  - job_name: icmp_probes
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    static_configs:
+      - targets: ['<EU_IP>']
+        labels:
+          node: 'EU'
+          name: 'EU Link'
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

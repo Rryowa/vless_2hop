@@ -12,33 +12,65 @@ fi
 
 export PATH=$PATH:/usr/local/bin
 
-source "$(dirname "${BASH_SOURCE[0]}")/sni-config.sh"
+# --- Load Environment Variables ---
+ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.env"
+if [ -f "$ENV_FILE" ]; then
+    # Source .env, ignoring comments and xargs to handle potential spaces
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+fi
+
+# Helper to save to .env
+update_env() {
+    local key=$1
+    local val=$2
+    [ ! -f "$ENV_FILE" ] && touch "$ENV_FILE"
+    if grep -q "^${key}=" "$ENV_FILE"; then
+        sed -i "s|^${key}=.*|${key}=\"${val}\"|" "$ENV_FILE"
+    else
+        echo "${key}=\"${val}\"" >> "$ENV_FILE"
+    fi
+}
 
 # ── Wipe previous install — clean slate ──────────────────────────────────────
 echo "[Wipe] Removing previous Xray/monitoring install..."
-systemctl stop xray prometheus grafana-server pushgateway blackbox-exporter node-exporter alertmanager bark-webhook tls-push-monitor nginx 2>/dev/null || true
-systemctl disable xray prometheus grafana-server pushgateway blackbox-exporter node-exporter alertmanager bark-webhook tls-push-monitor nginx 2>/dev/null || true
+for svc in xray prometheus grafana-server pushgateway blackbox-exporter node-exporter alertmanager bark-webhook tls-push-monitor nginx; do
+    systemctl stop "$svc" 2>/dev/null || true
+    systemctl disable "$svc" 2>/dev/null || true
+done
 rm -f /etc/systemd/system/prometheus.service
 rm -f /etc/systemd/system/pushgateway.service
 rm -f /etc/systemd/system/blackbox-exporter.service
+rm -f /etc/systemd/system/node-exporter.service
 rm -f /etc/systemd/system/alertmanager.service
 rm -f /etc/systemd/system/tls-push-monitor.service
 rm -f /etc/systemd/system/bark-webhook.service
 rm -f /etc/systemd/system/xray.service.d/override.conf
 rmdir /etc/systemd/system/xray.service.d 2>/dev/null || true
-rm -f /usr/local/etc/xray/config.json
-rm -f /usr/local/etc/xray/user_links.txt
-rm -f /etc/logrotate.d/xray
+
+# Binaries
+rm -f /usr/local/bin/xray
+rm -f /usr/local/bin/prometheus /usr/local/bin/promtool
+rm -f /usr/local/bin/pushgateway
+rm -f /usr/local/bin/blackbox_exporter
+rm -f /usr/local/bin/node_exporter
+rm -f /usr/local/bin/alertmanager /usr/local/bin/amtool
 rm -f /usr/local/bin/tls-push-monitor.sh
+rm -f /usr/local/bin/bark-webhook.py
+
+# Configs and Data
+rm -rf /etc/prometheus/ /etc/alertmanager/ /var/lib/prometheus/
+rm -rf /etc/grafana/ /var/lib/grafana/
+rm -rf /usr/local/etc/xray/
+rm -rf /usr/local/share/xray/
+rm -rf /var/log/xray/
+rm -f /etc/logrotate.d/xray
+rm -f /etc/xray-monitor.env
 rm -f /etc/nginx/sites-enabled/grafana-proxy
 rm -f /etc/nginx/sites-available/grafana-proxy
-rm -f /etc/xray-monitor.env
-rm -f /etc/xray-kuma.env
-rm -rf /var/log/xray
 
 if command -v ufw &>/dev/null; then
     ufw delete allow 443/tcp 2>/dev/null || true
-    ufw allow 443/tcp
+    ufw delete allow 8443/tcp 2>/dev/null || true
 fi
 
 (crontab -l 2>/dev/null | grep -v "russia-v2ray-rules-dat" || true) | crontab -
@@ -49,25 +81,36 @@ echo "[Wipe] Done."
 echo "Checking/Installing Dependencies (jq, curl, openssl)..."
 apt update && apt install -y git curl openssl cron jq
 
-# User input prompts
+# ── Inputs ────────────────────────────────────────────────────────────────────
 echo "=========================================================="
-echo "      INPUT EU EXIT NODE DETAILS (FROM EU SCRIPT)         "
+echo "      VPN CONFIGURATION (LOADED FROM .env)                "
 echo "=========================================================="
-echo "EU SNI targets (must match EU node):"
-echo "  :${PORT_1} → ${SNI_1}"
-echo "  :${PORT_2} → ${SNI_2}"
-echo "  :${PORT_3} → ${SNI_3}"
+
+# SNIs
+read -p "SNI 1 (Port 443) [current: $SNI_1]: " INPUT; SNI_1=${INPUT:-$SNI_1}; update_env SNI_1 "$SNI_1"
+read -p "SNI 2 (Port 8443) [current: $SNI_2]: " INPUT; SNI_2=${INPUT:-$SNI_2}; update_env SNI_2 "$SNI_2"
+read -p "SNI 3 (Port 9443) [current: $SNI_3]: " INPUT; SNI_3=${INPUT:-$SNI_3}; update_env SNI_3 "$SNI_3"
+read -p "RU Local SNI (e.g., ya.ru) [current: $LOCAL_SNI]: " INPUT; LOCAL_SNI=${INPUT:-$LOCAL_SNI}; update_env LOCAL_SNI "$LOCAL_SNI"
+
+# EU Node
+echo "----------------------------------------------------------"
+echo "EU Exit Node Details:"
+read -p "EU VPS IP [current: $EU_IP]: " INPUT; EU_IP=${INPUT:-$EU_IP}; update_env EU_IP "$EU_IP"
+read -p "EU UUID [current: $EU_UUID]: " INPUT; EU_UUID=${INPUT:-$EU_UUID}; update_env EU_UUID "$EU_UUID"
+read -p "EU Public Key [current: $EU_PUBKEY]: " INPUT; EU_PUBKEY=${INPUT:-$EU_PUBKEY}; update_env EU_PUBKEY "$EU_PUBKEY"
+read -p "EU Short ID [current: $EU_SHORTID]: " INPUT; EU_SHORTID=${INPUT:-$EU_SHORTID}; update_env EU_SHORTID "$EU_SHORTID"
+
+# Monitoring
+echo "----------------------------------------------------------"
+echo "Monitoring Setup:"
+read -p "BARK_KEY (blank to skip) [current: $BARK_KEY]: " INPUT; BARK_KEY=${INPUT:-$BARK_KEY}; update_env BARK_KEY "$BARK_KEY"
+read -p "Monitoring Domain [current: $MONITORING_DOMAIN]: " INPUT; MONITORING_DOMAIN=${INPUT:-$MONITORING_DOMAIN}; update_env MONITORING_DOMAIN "$MONITORING_DOMAIN"
 echo "=========================================================="
-read -p "Enter EU VPS IP: " EU_IP
-read -p "Enter EU UUID: " EU_UUID
-read -p "Enter EU Public Key: " EU_PUBKEY
-read -p "Enter EU Short ID: " EU_SHORTID
-echo "=========================================================="
-echo "      MONITORING SETUP                                    "
-echo "=========================================================="
-read -p "Enter BARK_KEY (leave blank to skip notifications): " BARK_KEY
-read -p "Enter monitoring/Grafana domain (e.g., rryo.mooo.com): " KUMA_DOMAIN
-echo "=========================================================="
+
+# Static Ports (ensure they are in ENV)
+[ -z "$PORT_1" ] && PORT_1=443 && update_env PORT_1 443
+[ -z "$PORT_2" ] && PORT_2=8443 && update_env PORT_2 8443
+[ -z "$PORT_3" ] && PORT_3=9443 && update_env PORT_3 9443
 
 echo "1. Installing Xray-core..."
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
@@ -152,6 +195,35 @@ cat > /usr/local/etc/xray/config.json << XRAY_EOF
           "serverNames": ["$LOCAL_SNI"],
           "privateKey": "$RU_PRIV",
           "shortIds": ["$RU_SHORTID"]
+        }
+      }
+    },
+    {
+      "tag": "vless-xhttp-in",
+      "port": 8443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "$RU_UUID"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "dest": "${LOCAL_SNI}:443",
+          "xver": 0,
+          "serverNames": ["$LOCAL_SNI"],
+          "privateKey": "$RU_PRIV",
+          "shortIds": ["$RU_SHORTID"]
+        },
+        "xhttpSettings": {
+          "mode": "packet-up",
+          "path": "/unicorn-magic"
         }
       }
     }
@@ -316,25 +388,33 @@ else
     exit 1
 fi
 
-# Share Link for RU Bridge (VLESS Reality Vision TCP)
+# Share Links for RU Bridge
 PUB_URLSAFE=$(echo "$RU_PUB" | tr '+/' '-_' | tr -d '=')
-SHARE_LINK="vless://$RU_UUID@$IP:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${LOCAL_SNI}&fp=chrome&pbk=$PUB_URLSAFE&sid=$RU_SHORTID&type=tcp&headerType=none#RU-BRIDGE-PRIMARY"
+LINK_TCP="vless://$RU_UUID@$IP:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${LOCAL_SNI}&fp=chrome&pbk=$PUB_URLSAFE&sid=$RU_SHORTID&type=tcp&headerType=none#RU-Reality-TCP"
+LINK_XHTTP="vless://$RU_UUID@$IP:8443?encryption=none&security=reality&sni=${LOCAL_SNI}&fp=chrome&pbk=$PUB_URLSAFE&sid=$RU_SHORTID&type=xhttp&mode=packet-up&path=%2Funicorn-magic#RU-Reality-xHTTP"
 
-# Save the initial admin link to a permanent file for future reference
+# Save links
 mkdir -p /usr/local/etc/xray
 LINKS_FILE="/usr/local/etc/xray/user_links.txt"
-echo "$(date -Iseconds) - Admin (Primary): $SHARE_LINK" > "$LINKS_FILE"
+{
+  echo "$(date -Iseconds) - RU Reality TCP (443): $LINK_TCP"
+  echo "$(date -Iseconds) - RU Reality xHTTP (8443): $LINK_XHTTP"
+} > "$LINKS_FILE"
 
 echo "=========================================================="
 echo "                   RU SETUP COMPLETE                      "
 echo "=========================================================="
-echo "SHARABLE VLESS LINK (RU PRIMARY):"
-echo -e "\e[32m$SHARE_LINK\e[0m"
-echo "✅ Link successfully saved to: $LINKS_FILE"
+echo "1. VLESS Reality TCP (Vision):"
+echo -e "\e[32m$LINK_TCP\e[0m"
+echo ""
+echo "2. VLESS Reality xHTTP (Packet-up):"
+echo -e "\e[32m$LINK_XHTTP\e[0m"
+echo ""
+echo "✅ Links saved to: $LINKS_FILE"
 echo "=========================================================="
 
 echo "5. Installing monitoring stack (Prometheus + Grafana + Alertmanager)..."
 BARK_KEY="$BARK_KEY" \
 EU_IP="$EU_IP" \
-KUMA_DOMAIN="$KUMA_DOMAIN" \
+MONITORING_DOMAIN="$MONITORING_DOMAIN" \
 bash "$(dirname "$0")/setup-monitoring.sh"

@@ -7,7 +7,7 @@
 #
 # Environment variables (set by caller or prompted interactively):
 #   EU_IP        - IP of the EU exit VPS
-#   KUMA_DOMAIN  - Domain for Grafana dashboard (Let's Encrypt cert)
+#   MONITORING_DOMAIN  - Domain for Grafana dashboard (Let's Encrypt cert)
 #   BARK_KEY     - Bark device key for push notifications (optional)
 
 set -e
@@ -19,18 +19,40 @@ fi
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# --- Load Environment Variables ---
+ENV_FILE="${REPO_DIR}/.env"
+if [ -f "$ENV_FILE" ]; then
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+fi
+
+# Helper to save to .env
+update_env() {
+    local key=$1
+    local val=$2
+    [ ! -f "$ENV_FILE" ] && touch "$ENV_FILE"
+    if grep -q "^${key}=" "$ENV_FILE"; then
+        sed -i "s|^${key}=.*|${key}=\"${val}\"|" "$ENV_FILE"
+    else
+        echo "${key}=\"${val}\"" >> "$ENV_FILE"
+    fi
+}
+
 # ── Inputs ────────────────────────────────────────────────────────────────────
-[ -z "$EU_IP" ]          && read -rp "Enter EU VPS IP: " EU_IP
-[ -z "$KUMA_DOMAIN" ]    && read -rp "Enter monitoring domain (e.g., rryo.mooo.com): " KUMA_DOMAIN
-[ -z "$BARK_KEY" ]       && read -rp "Enter BARK_KEY (leave blank to skip notifications): " BARK_KEY
-[ -z "$GRAFANA_PASSWORD" ] && read -rsp "Enter Grafana admin password: " GRAFANA_PASSWORD && echo
+echo "=========================================================="
+echo "      MONITORING CONFIGURATION (LOADED FROM .env)         "
+echo "=========================================================="
+read -p "Enter EU VPS IP [current: $EU_IP]: " INPUT; EU_IP=${INPUT:-$EU_IP}; update_env EU_IP "$EU_IP"
+read -p "Enter monitoring domain [current: $MONITORING_DOMAIN]: " INPUT; MONITORING_DOMAIN=${INPUT:-$MONITORING_DOMAIN}; update_env MONITORING_DOMAIN "$MONITORING_DOMAIN"
+read -p "Enter BARK_KEY [current: $BARK_KEY]: " INPUT; BARK_KEY=${INPUT:-$BARK_KEY}; update_env BARK_KEY "$BARK_KEY"
+read -p "Enter Grafana admin password [current: $GRAFANA_PASSWORD]: " INPUT; GRAFANA_PASSWORD=${INPUT:-$GRAFANA_PASSWORD}; update_env GRAFANA_PASSWORD "$GRAFANA_PASSWORD"
+echo "=========================================================="
 
 if [ -z "$EU_IP" ]; then
     echo "ERROR: EU_IP is required."
     exit 1
 fi
-if [ -z "$KUMA_DOMAIN" ]; then
-    echo "ERROR: KUMA_DOMAIN is required."
+if [ -z "$MONITORING_DOMAIN" ]; then
+    echo "ERROR: MONITORING_DOMAIN is required."
     exit 1
 fi
 
@@ -48,18 +70,23 @@ rm -f /etc/systemd/system/node-exporter.service
 rm -f /etc/systemd/system/alertmanager.service
 rm -f /etc/systemd/system/tls-push-monitor.service
 rm -f /etc/systemd/system/bark-webhook.service
+
+# Binaries
 rm -f /usr/local/bin/prometheus /usr/local/bin/promtool
 rm -f /usr/local/bin/pushgateway
 rm -f /usr/local/bin/blackbox_exporter
-rm -f /usr/local/bin/alertmanager /usr/local/bin/amtool
 rm -f /usr/local/bin/node_exporter
+rm -f /usr/local/bin/alertmanager /usr/local/bin/amtool
 rm -f /usr/local/bin/bark-webhook.py
 rm -f /usr/local/bin/tls-push-monitor.sh
-rm -rf /etc/prometheus/
-rm -rf /etc/alertmanager/
-rm -rf /var/lib/grafana/
-rm -rf /etc/grafana/dashboards/
-rm -rf /var/lib/prometheus/
+
+# Configs and Data
+rm -rf /etc/prometheus/ /var/lib/prometheus/
+rm -rf /etc/alertmanager/ /var/lib/alertmanager/
+rm -rf /etc/grafana/ /var/lib/grafana/
+rm -rf /etc/nginx/sites-enabled/grafana-proxy
+rm -rf /etc/nginx/sites-available/grafana-proxy
+rm -f /etc/xray-monitor.env
 
 if command -v ufw &>/dev/null; then
     ufw delete allow 3000/tcp 2>/dev/null || true
@@ -69,11 +96,8 @@ if command -v ufw &>/dev/null; then
         echo "y" | ufw delete $rule 2>/dev/null || true
     done
 fi
-rm -f /etc/xray-monitor.env
-rm -f /etc/nginx/sites-enabled/grafana-proxy
-rm -f /etc/nginx/sites-available/grafana-proxy
-systemctl daemon-reload
 apt-get purge -y grafana 2>/dev/null || true
+systemctl daemon-reload
 echo "[Wipe] Done."
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -85,8 +109,6 @@ github_latest_version() {
         | grep -oP 'v[\d.]+' \
         | head -1
 }
-
-source "$REPO_DIR/sni-config.sh"
 
 # ── Write env file early so all services that need it can start ──────────────
 cat > /etc/xray-monitor.env << EOF
@@ -124,7 +146,7 @@ id prometheus &>/dev/null || useradd --no-create-home --shell /bin/false prometh
 # Create dirs and copy config
 mkdir -p /etc/prometheus /var/lib/prometheus
 sed -e "s/<EU_IP>/${EU_IP}/g" \
-    -e "s/<KUMA_DOMAIN>/${KUMA_DOMAIN}/g" \
+    -e "s/<MONITORING_DOMAIN>/${MONITORING_DOMAIN}/g" \
     -e "s/<LOCAL_SNI>/${LOCAL_SNI}/g" \
     -e "s/<SNI_1>/${SNI_1}/g" \
     -e "s/<SNI_2>/${SNI_2}/g" \
@@ -141,6 +163,11 @@ modules:
   http_2xx:
     prober: http
     http:
+      preferred_ip_protocol: "ip4"
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
       preferred_ip_protocol: "ip4"
 BLACKBOXEOF
 
@@ -507,9 +534,9 @@ if command -v ufw &>/dev/null; then
     echo "       UFW: opened port 80 for ACME challenge"
 fi
 
-echo "       Requesting certificate for ${KUMA_DOMAIN}..."
+echo "       Requesting certificate for ${MONITORING_DOMAIN}..."
 certbot certonly --standalone --non-interactive --agree-tos \
-    --register-unsafely-without-email -d "$KUMA_DOMAIN" \
+    --register-unsafely-without-email -d "$MONITORING_DOMAIN" \
     --pre-hook "ufw allow 80/tcp" --post-hook "ufw delete allow 80/tcp"
 
 if command -v ufw &>/dev/null; then
@@ -517,14 +544,14 @@ if command -v ufw &>/dev/null; then
     echo "[Nginx] UFW port 80 closed (ACME done)"
 fi
 
-CERT_PATH="/etc/letsencrypt/live/${KUMA_DOMAIN}/fullchain.pem"
-KEY_PATH="/etc/letsencrypt/live/${KUMA_DOMAIN}/privkey.pem"
+CERT_PATH="/etc/letsencrypt/live/${MONITORING_DOMAIN}/fullchain.pem"
+KEY_PATH="/etc/letsencrypt/live/${MONITORING_DOMAIN}/privkey.pem"
 
 # Grafana listens on 127.0.0.1:13000; nginx proxies public :3000 SSL -> 13000
 cat > /etc/nginx/sites-available/grafana-proxy << EOF
 server {
     listen 3000 ssl;
-    server_name ${KUMA_DOMAIN};
+    server_name ${MONITORING_DOMAIN};
 
     ssl_certificate     ${CERT_PATH};
     ssl_certificate_key ${KEY_PATH};
@@ -556,7 +583,7 @@ if command -v ufw &>/dev/null; then
 fi
 
 systemctl enable certbot.timer 2>/dev/null || true
-echo "[9/12] nginx HTTPS proxy active: ${KUMA_DOMAIN}:3000 -> 127.0.0.1:13000 (Grafana)"
+echo "[9/12] nginx HTTPS proxy active: ${MONITORING_DOMAIN}:3000 -> 127.0.0.1:13000 (Grafana)"
 
 # ── Step 10: UFW rules for monitoring ports ───────────────────────────────────
 echo "[10/12] Configuring UFW firewall rules..."
@@ -593,7 +620,7 @@ echo ""
 echo "=========================================================="
 echo "         MONITORING STACK INSTALLED (RU NODE)            "
 echo "=========================================================="
-echo "Grafana dashboard: https://${KUMA_DOMAIN}:3000  (admin / ${GRAFANA_PASSWORD:-admin})"
+echo "Grafana dashboard: https://${MONITORING_DOMAIN}:3000  (admin / ${GRAFANA_PASSWORD:-admin})"
 echo "Prometheus:        http://127.0.0.1:9090 (local only)"
 echo "Pushgateway:       http://0.0.0.0:9091 (EU IP whitelisted)"
 echo "Alertmanager:      http://127.0.0.1:9093 (local only)"

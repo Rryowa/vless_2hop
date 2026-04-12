@@ -14,6 +14,7 @@ Client → RU Bridge VPS (:443, VLESS+Reality+Vision+TCP)
 - **Inbound (RU):** VLESS + Reality + Vision + TCP (SNI: `vkvideo.ru`)
 - **Outbound (RU to EU):** VLESS + Reality + XHTTP (SNI: Multiple Dutch/German mirrors)
 - **Monitoring:** Full Prometheus/Grafana stack on RU node with cross-border DPI telemetry.
+- **Optimization:** Automatic TCP BBR enablement, TCP Fast Open, and safe file-handle limits (65k nofile) for low-latency, private cross-border traffic without risking VPS resource exhaustion.
 
 ---
 
@@ -35,12 +36,17 @@ Client → RU Bridge VPS (:443, VLESS+Reality+Vision+TCP)
    apt update && apt install git -y
    git clone https://github.com/Rryowa/vless_2hop.git && cd vless_2hop
    ```
-3. Run the hardening script:
+3. Copy the `.env` template and edit it with your configuration:
+   ```bash
+   nano .env
+   ```
+   *Fill in your desired SNIs and domains before proceeding. You can sync this file between your EU and RU nodes.*
+4. Run the hardening script:
    ```bash
    bash setup-vps.sh
    ```
    *Paste your SSH public key when prompted.*
-4. **Reconnect on port 48022:** `ssh -p 48022 -i "$env:USERPROFILE\.ssh\vps_key" root@<IP>`
+5. **Reconnect on port 48022:** `ssh -p 48022 -i "$env:USERPROFILE\.ssh\vps_key" root@<IP>`
 
 ### Phase 1: EU Exit Node
 
@@ -49,8 +55,8 @@ Client → RU Bridge VPS (:443, VLESS+Reality+Vision+TCP)
    cd vless_2hop
    sudo bash setup-eu-exit.sh
    ```
-2. **Prompts:** Bark Key (optional), RU Bridge IP (optional for peer monitors).
-3. **Save the output:** Copy the **EU UUID**, **EU Public Key**, and **EU Short ID**.
+2. **Setup:** The script will load values from `.env` and prompt you to confirm or update them.
+3. **Save the output:** Copy the generated **EU UUID**, **EU Public Key**, and **EU Short ID**, and add them to your `.env` file.
 
 ### Phase 2: RU Bridge Node
 
@@ -59,7 +65,7 @@ Client → RU Bridge VPS (:443, VLESS+Reality+Vision+TCP)
    cd vless_2hop
    bash setup-ru-bridge.sh
    ```
-2. **Prompts:** EU IP, EU UUID, EU Public Key, EU Short ID, Bark Key, Monitoring Domain.
+2. **Setup:** The script will load your updated `.env` file (ensure EU details are filled in) and prompt to confirm.
 3. **Dashboard Access:** DNS for your monitoring domain must point to the RU VPS IP. Access the dashboard at `https://<DOMAIN>:3000`.
 
 ---
