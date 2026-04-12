@@ -53,6 +53,7 @@ ufw default deny incoming
 ufw default allow outgoing
 ufw allow 48022/tcp
 ufw allow 443/tcp
+ufw allow 8443/tcp
 ufw --force enable
 
 echo "[4/5] Installing Fail2ban..."

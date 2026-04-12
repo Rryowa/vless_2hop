@@ -583,7 +583,7 @@
           "refId": "A"
         },
         {
-          "expr": "rate(node_netstat_Tcp_RetransSegs{node=~\"$node\"}[5m]) / rate(node_netstat_Tcp_OutSegs{node=~\"$node\"}[5m] > 0)",
+          "expr": "rate(node_netstat_Tcp_RetransSegs{node=~\"$node\"}[5m]) / (rate(node_netstat_Tcp_OutSegs{node=~\"$node\"}[5m]) > 0)",
           "legendFormat": "TCP Retrans Rate (DPI Interference) {{node}}",
           "refId": "B"
         }

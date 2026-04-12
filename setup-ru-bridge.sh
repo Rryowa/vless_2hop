@@ -349,8 +349,8 @@ cat > /usr/local/etc/xray/config.json << XRAY_EOF
   "routing": {
     "domainStrategy": "IPIfNonMatch",
     "rules": [
-      { "type": "field", "outboundTag": "block-ru", "domain": ["geosite:category-ru", "geosite:ru-available-only-inside"] },
-      { "type": "field", "outboundTag": "block-ru", "ip": ["geoip:ru"] },
+      { "type": "field", "outboundTag": "direct-ru", "domain": ["geosite:category-ru", "geosite:ru-available-only-inside"] },
+      { "type": "field", "outboundTag": "direct-ru", "ip": ["geoip:ru"] },
       { "type": "field", "outboundTag": "direct-ru", "ip": ["geoip:private"] },
       { "type": "field", "balancerTag": "eu-balancer", "network": "tcp,udp" }
     ],
@@ -379,6 +379,12 @@ echo "3.3. Testing Xray Configuration..."
 if ! xray -test -c /usr/local/etc/xray/config.json; then
     echo "[FAIL] Configuration error! Aborting restart."
     exit 1
+fi
+
+echo "3.4. Configuring UFW firewall for Xray..."
+if command -v ufw &>/dev/null; then
+    ufw allow 443/tcp
+    ufw allow 8443/tcp
 fi
 
 echo "4. Restarting Xray..."

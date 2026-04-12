@@ -29,7 +29,7 @@ groups:
           description: "ICMP packet loss to {{ $labels.instance }} is above 10% (current: {{ $value | humanizePercentage }})"
 
       - alert: HighTCPRetransmissions
-        expr: rate(node_netstat_Tcp_RetransSegs[5m]) / rate(node_netstat_Tcp_OutSegs[5m] > 0) > 0.05
+        expr: rate(node_netstat_Tcp_RetransSegs[5m]) / (rate(node_netstat_Tcp_OutSegs[5m]) > 0) > 0.05
         for: 5m
         labels:
           severity: warning
