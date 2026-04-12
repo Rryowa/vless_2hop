@@ -117,6 +117,12 @@ fi
 SHORT_ID=$(openssl rand -hex 4)
 IP=$(curl -4 -s https://ifconfig.me)
 
+# Save generated EU credentials to .env
+update_env EU_UUID "$UUID"
+update_env EU_PUBKEY "$PUBLIC_KEY"
+update_env EU_SHORTID "$SHORT_ID"
+update_env EU_IP "$IP"
+
 echo "4. Creating Xray Server Configuration..."
 mkdir -p /var/log/xray
 chown -R nobody:nogroup /var/log/xray

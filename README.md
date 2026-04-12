@@ -36,11 +36,11 @@ Client → RU Bridge VPS (:443, VLESS+Reality+Vision+TCP)
    apt update && apt install git -y
    git clone https://github.com/Rryowa/vless_2hop.git && cd vless_2hop
    ```
-3. Copy the `.env` template and edit it with your configuration:
+3. **Set up the environment:**
    ```bash
    nano .env
    ```
-   *Fill in your desired SNIs and domains before proceeding. You can sync this file between your EU and RU nodes.*
+   *Fill in your initial SNIs and domains. The setup scripts will automatically update this file with generated keys and IPs, so manual editing is not needed after the first run.*
 4. Run the hardening script:
    ```bash
    bash setup-vps.sh
@@ -56,7 +56,7 @@ Client → RU Bridge VPS (:443, VLESS+Reality+Vision+TCP)
    sudo bash setup-eu-exit.sh
    ```
 2. **Setup:** The script will load values from `.env` and prompt you to confirm or update them.
-3. **Save the output:** Copy the generated **EU UUID**, **EU Public Key**, and **EU Short ID**, and add them to your `.env` file.
+3. **Automatic Storage:** The script will generate **EU UUID**, **EU Public Key**, and **EU Short ID** and save them directly to your `.env` file.
 
 ### Phase 2: RU Bridge Node
 
@@ -65,7 +65,7 @@ Client → RU Bridge VPS (:443, VLESS+Reality+Vision+TCP)
    cd vless_2hop
    bash setup-ru-bridge.sh
    ```
-2. **Setup:** The script will load your updated `.env` file (ensure EU details are filled in) and prompt to confirm.
+2. **Setup:** The script will load your `.env` file and prompt you to confirm details. Ensure you've synced the EU node details from your EU `.env` (the only manual step left is syncing the two nodes' `.env` files).
 3. **Dashboard Access:** DNS for your monitoring domain must point to the RU VPS IP. Access the dashboard at `https://<DOMAIN>:3000`.
 
 ---

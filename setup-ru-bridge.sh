@@ -136,6 +136,12 @@ fi
 RU_SHORTID=$(openssl rand -hex 4)
 IP=$(curl -4 -s https://ifconfig.me)
 
+# Save generated RU credentials to .env
+update_env RU_UUID "$RU_UUID"
+update_env RU_PUBKEY "$RU_PUB"
+update_env RU_SHORTID "$RU_SHORTID"
+update_env RU_IP "$IP"
+
 echo "3. Creating Xray Bridge Configuration..."
 mkdir -p /var/log/xray
 chown -R nobody:nogroup /var/log/xray
