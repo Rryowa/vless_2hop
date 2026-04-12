@@ -139,15 +139,23 @@
               },
               {
                 "id": "color",
-                "value": { "mode": "thresholds" }
+                "value": {
+                  "mode": "thresholds"
+                }
               },
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "red", "value": null },
-                    { "color": "green", "value": 1 }
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
                   ]
                 }
               },
@@ -157,8 +165,12 @@
                   {
                     "type": "value",
                     "options": {
-                      "0": { "text": "DOWN" },
-                      "1": { "text": "UP" }
+                      "0": {
+                        "text": "DOWN"
+                      },
+                      "1": {
+                        "text": "UP"
+                      }
                     }
                   }
                 ]
@@ -173,7 +185,9 @@
             "properties": [
               {
                 "id": "color",
-                "value": { "mode": "thresholds" }
+                "value": {
+                  "mode": "thresholds"
+                }
               },
               {
                 "id": "unit",
@@ -188,9 +202,18 @@
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "#EAB839", "value": 100 },
-                    { "color": "red", "value": 500 }
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 100
+                    },
+                    {
+                      "color": "red",
+                      "value": 500
+                    }
                   ]
                 }
               }
@@ -225,7 +248,10 @@
       "options": {
         "showHeader": true,
         "sortBy": [
-          { "displayName": "Name", "desc": false }
+          {
+            "displayName": "Name",
+            "desc": false
+          }
         ],
         "footer": {
           "show": false
@@ -316,15 +342,23 @@
               },
               {
                 "id": "color",
-                "value": { "mode": "thresholds" }
+                "value": {
+                  "mode": "thresholds"
+                }
               },
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "red", "value": null },
-                    { "color": "green", "value": 1 }
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
                   ]
                 }
               },
@@ -334,8 +368,12 @@
                   {
                     "type": "value",
                     "options": {
-                      "0": { "text": "DOWN" },
-                      "1": { "text": "UP" }
+                      "0": {
+                        "text": "DOWN"
+                      },
+                      "1": {
+                        "text": "UP"
+                      }
                     }
                   }
                 ]
@@ -350,7 +388,9 @@
             "properties": [
               {
                 "id": "color",
-                "value": { "mode": "thresholds" }
+                "value": {
+                  "mode": "thresholds"
+                }
               },
               {
                 "id": "unit",
@@ -365,9 +405,18 @@
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "#EAB839", "value": 100 },
-                    { "color": "red", "value": 500 }
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 100
+                    },
+                    {
+                      "color": "red",
+                      "value": 500
+                    }
                   ]
                 }
               }
@@ -390,7 +439,10 @@
       "options": {
         "showHeader": true,
         "sortBy": [
-          { "displayName": "SNI", "desc": false }
+          {
+            "displayName": "SNI",
+            "desc": false
+          }
         ],
         "footer": {
           "show": false
@@ -481,15 +533,23 @@
               },
               {
                 "id": "color",
-                "value": { "mode": "thresholds" }
+                "value": {
+                  "mode": "thresholds"
+                }
               },
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "red", "value": null },
-                    { "color": "green", "value": 1 }
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
                   ]
                 }
               },
@@ -499,8 +559,12 @@
                   {
                     "type": "value",
                     "options": {
-                      "0": { "text": "DOWN" },
-                      "1": { "text": "UP" }
+                      "0": {
+                        "text": "DOWN"
+                      },
+                      "1": {
+                        "text": "UP"
+                      }
                     }
                   }
                 ]
@@ -515,7 +579,9 @@
             "properties": [
               {
                 "id": "color",
-                "value": { "mode": "thresholds" }
+                "value": {
+                  "mode": "thresholds"
+                }
               },
               {
                 "id": "unit",
@@ -530,9 +596,18 @@
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "#EAB839", "value": 100 },
-                    { "color": "red", "value": 500 }
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 100
+                    },
+                    {
+                      "color": "red",
+                      "value": 500
+                    }
                   ]
                 }
               }
@@ -555,7 +630,10 @@
       "options": {
         "showHeader": true,
         "sortBy": [
-          { "displayName": "SNI", "desc": false }
+          {
+            "displayName": "SNI",
+            "desc": false
+          }
         ],
         "footer": {
           "show": false
@@ -628,8 +706,14 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 0.05 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
             ]
           },
           "unit": "percentunit"
@@ -967,6 +1051,46 @@
         "sortBy": [],
         "footer": {
           "show": false
+        }
+      }
+    },
+    {
+      "id": 99,
+      "title": "Candidate SNI Latency Trend (Direct)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "tls_probe_latency_ms{mode=\"candidate\", sni=~\"$sni\"}",
+          "legendFormat": "{{sni}} candidate",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
         }
       }
     }

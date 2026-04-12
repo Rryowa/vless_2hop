@@ -71,5 +71,44 @@ tls_probe_latency_ms 0
 EOF
     done
 
+    if [ -n "$CANDIDATE_TARGETS" ]; then
+        IFS=',' read -ra CAND_LIST <<< "$CANDIDATE_TARGETS"
+        for TARGET in "${CAND_LIST[@]}"; do
+            TARGET_HOST="${TARGET%%:*}"
+            PORT="${TARGET##*:}"
+            if [ "$PORT" = "$TARGET_HOST" ] || [ -z "$PORT" ]; then
+                PORT=443
+            fi
+
+            SNI_LABEL="${TARGET_HOST}"
+            MODE="candidate"
+            PUSH_URL="${TLS_PUSHGATEWAY_URL}/metrics/job/tls_probes/instance/${INSTANCE}/sni/${SNI_LABEL}/mode/${MODE}"
+
+            RESULT=$(curl -D /dev/null -o /dev/null -w "%{time_appconnect}" \
+                -s --connect-timeout 4 --max-time 5 \
+                "https://${TARGET_HOST}:${PORT}" 2>&1)
+
+            if echo "$RESULT" | grep -qE '^[0-9]+\.?[0-9]*$'; then
+                MS=$(echo "$RESULT" | awk '{printf "%.0f", $1 * 1000}')
+                if [ "$MS" -gt 0 ] 2>/dev/null; then
+                    curl -s -H "Content-Type: text/plain; version=0.0.4; charset=utf-8" --data-binary @- "${PUSH_URL}" << EOF
+# TYPE tls_probe_success gauge
+tls_probe_success 1
+# TYPE tls_probe_latency_ms gauge
+tls_probe_latency_ms ${MS}
+EOF
+                    continue
+                fi
+            fi
+
+            curl -s -H "Content-Type: text/plain; version=0.0.4; charset=utf-8" --data-binary @- "${PUSH_URL}" << EOF
+# TYPE tls_probe_success gauge
+tls_probe_success 0
+# TYPE tls_probe_latency_ms gauge
+tls_probe_latency_ms 0
+EOF
+        done
+    fi
+
     sleep 30
 done

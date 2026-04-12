@@ -113,6 +113,7 @@ github_latest_version() {
 # ── Write env file early so all services that need it can start ──────────────
 cat > /etc/xray-monitor.env << EOF
 TLS_TARGETS=${SNI_1}:${PORT_1},${SNI_2}:${PORT_2},${SNI_3}:${PORT_3}
+CANDIDATE_TARGETS=${CANDIDATE_TARGETS}
 TLS_RESOLVE_TO=${EU_IP}
 TLS_MODE=dpi
 TLS_PUSHGATEWAY_URL=http://127.0.0.1:9091
@@ -160,6 +161,8 @@ modules:
   tcp_connect:
     prober: tcp
     timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
   http_2xx:
     prober: http
     http:
@@ -626,5 +629,8 @@ echo "Pushgateway:       http://0.0.0.0:9091 (EU IP whitelisted)"
 echo "Alertmanager:      http://127.0.0.1:9093 (local only)"
 echo ""
 echo "tls-push-monitor:  running in DPI mode"
+echo "Bark alerts:       $([ -n "$BARK_KEY" ] && echo "enabled" || echo "disabled — no BARK_KEY")"
+echo "=========================================================="
+
 echo "Bark alerts:       $([ -n "$BARK_KEY" ] && echo "enabled" || echo "disabled — no BARK_KEY")"
 echo "=========================================================="
